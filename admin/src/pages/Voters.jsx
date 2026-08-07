@@ -6,7 +6,7 @@ import {
   AlertCircle, Cloud,
 } from 'lucide-react'
 import {
-  uploadVoterCSV, downloadVoterCSV,
+  uploadVoterCSV, downloadVoterCSV, getVoterCSVDownloadURL,
   uploadBooths,
   saveImportMeta, getImportMeta,
   clearBooths, deleteImportMeta,
@@ -198,24 +198,50 @@ export default function Voters() {
         }
       })
     } else {
-      // No local meta — check Firestore (first load on a new device)
+      // No local meta — check Firestore first, then fall back to Storage directly
       getImportMeta()
-        .then(meta => {
-          if (!meta?.storageUrl) return
-          cacheImportMeta({ ...meta, csvHeaders: DEFAULT_HEADERS }) // best guess
-          setImportMeta(meta)
+        .then(async meta => {
+          // Try Firestore meta URL first
+          let storageUrl = meta?.storageUrl
+          // If Firestore meta was deleted (accidental clear), try Storage path directly
+          if (!storageUrl) {
+            try { storageUrl = await getVoterCSVDownloadURL() } catch { return }
+          }
+          const firestoreMeta = meta || {}
+          cacheImportMeta({ ...firestoreMeta, csvHeaders: DEFAULT_HEADERS })
+          setImportMeta(firestoreMeta)
           setHasFile(true)
           setLoadStatus('loading')
-          return downloadVoterCSV(meta.storageUrl)
-            .then(text => {
-              const { headers, voters: parsed } = parseCSV(text)
-              setVoters(parsed)
-              setCsvHeaders(headers)
-              setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
-              cacheVoters(parsed)
-              cacheImportMeta({ ...meta, csvHeaders: headers })
-              setLoadStatus('ready')
-            })
+          const text = await downloadVoterCSV(storageUrl)
+          const { headers, voters: parsed } = parseCSV(text)
+          const { boothCol, stationCol } = detectCols(headers, parsed.slice(0, 50))
+          setVoters(parsed)
+          setCsvHeaders(headers)
+          setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
+          cacheVoters(parsed)
+          // Rebuild Firestore meta + booths if they were wiped
+          const now = new Date()
+          const boothSet   = new Set(parsed.map(v => v[boothCol]).filter(Boolean))
+          const stationSet = new Set(parsed.map(v => v[stationCol]).filter(Boolean))
+          const recoveredMeta = {
+            ...firestoreMeta,
+            storageUrl,
+            csvHeaders: headers,
+            boothCol,
+            stationCol,
+            records:  firestoreMeta.records  ?? parsed.length,
+            booths:   firestoreMeta.booths   ?? boothSet.size,
+            stations: firestoreMeta.stations ?? stationSet.size,
+            importedOn: firestoreMeta.importedOn ?? now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+          }
+          cacheImportMeta(recoveredMeta)
+          setImportMeta(recoveredMeta)
+          // Restore Firestore collections if they were cleared
+          if (!meta) {
+            saveImportMeta(recoveredMeta).catch(() => {})
+            uploadBooths(parsed, boothCol, stationCol).catch(() => {})
+          }
+          setLoadStatus('ready')
         })
         .catch(() => {})
     }

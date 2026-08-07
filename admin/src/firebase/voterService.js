@@ -24,6 +24,12 @@ export async function downloadVoterCSV(url) {
   return res.text()
 }
 
+// Get the download URL for the latest voter CSV directly from Storage
+// (works even when Firestore meta was deleted)
+export async function getVoterCSVDownloadURL() {
+  return getDownloadURL(ref(storage, 'voter_imports/latest.csv'))
+}
+
 // ── Booths (small collection, kept in Firestore) ─────────────────────────────
 
 // Delete all existing booth docs — used both before re-upload and when clearing all data.
