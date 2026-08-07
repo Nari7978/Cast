@@ -25,6 +25,18 @@ export async function downloadVoterCSV(url) {
 }
 
 // ── Booths (small collection, kept in Firestore) ─────────────────────────────
+
+// Delete all existing booth docs before re-writing — prevents duplicates on re-upload.
+async function clearBooths() {
+  const snap = await getDocs(collection(db, 'booths'))
+  if (snap.empty) return
+  for (let i = 0; i < snap.docs.length; i += CHUNK_SIZE) {
+    const batch = writeBatch(db)
+    snap.docs.slice(i, i + CHUNK_SIZE).forEach(d => batch.delete(d.ref))
+    await batch.commit()
+  }
+}
+
 export async function uploadBooths(voters, boothCol = 'BOOTH_NO', stationCol = 'POLLING_STATION') {
   const boothMap = {}
   voters.forEach(v => {
@@ -35,6 +47,9 @@ export async function uploadBooths(voters, boothCol = 'BOOTH_NO', stationCol = '
     }
     boothMap[key].voterCount++
   })
+
+  // Clear old data first so re-uploads never leave stale docs
+  await clearBooths()
 
   const entries = Object.values(boothMap)
   for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
