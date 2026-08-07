@@ -6,7 +6,7 @@ import {
   AlertCircle, Cloud,
 } from 'lucide-react'
 import {
-  uploadVoterCSV, downloadVoterCSV, getVoterCSVDownloadURL,
+  uploadVoterCSV, downloadVoterCSV, downloadVoterCSVFromStorage,
   uploadBooths,
   saveImportMeta, getImportMeta,
   clearBooths, deleteImportMeta,
@@ -146,18 +146,19 @@ export default function Voters() {
       // No local meta — check Firestore first, then fall back to Storage directly
       getImportMeta()
         .then(async meta => {
-          // Try Firestore meta URL first
-          let storageUrl = meta?.storageUrl
-          // If Firestore meta was deleted (accidental clear), try Storage path directly
-          if (!storageUrl) {
-            try { storageUrl = await getVoterCSVDownloadURL() } catch { return }
-          }
           const firestoreMeta = meta || {}
           cacheImportMeta({ ...firestoreMeta, csvHeaders: DEFAULT_HEADERS })
           setImportMeta(firestoreMeta)
           setHasFile(true)
           setLoadStatus('loading')
-          const text = await downloadVoterCSV(storageUrl)
+          // Use SDK getBlob (no CORS) — works whether or not Firestore meta exists
+          let text
+          if (meta?.storageUrl) {
+            text = await downloadVoterCSV(meta.storageUrl).catch(() => null)
+          }
+          if (!text) {
+            try { text = await downloadVoterCSVFromStorage() } catch { setLoadStatus('idle'); return }
+          }
           const { headers, voters: parsed } = parseCSV(text)
           const { boothCol, stationCol } = detectCols(headers, parsed.slice(0, 50))
           setVoters(parsed)
@@ -168,9 +169,10 @@ export default function Voters() {
           const now = new Date()
           const boothSet   = new Set(parsed.map(v => v[boothCol]).filter(Boolean))
           const stationSet = new Set(parsed.map(v => v[stationCol]).filter(Boolean))
+          const resolvedUrl = meta?.storageUrl || await import('../firebase/voterService').then(m => m.getVoterCSVDownloadURL()).catch(() => '')
           const recoveredMeta = {
             ...firestoreMeta,
-            storageUrl,
+            storageUrl: resolvedUrl,
             csvHeaders: headers,
             boothCol,
             stationCol,

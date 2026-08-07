@@ -2,7 +2,7 @@ import {
   collection, doc, writeBatch, serverTimestamp,
   setDoc, getDoc, getDocs, deleteDoc,
 } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { ref, uploadBytes, getDownloadURL, getBlob } from 'firebase/storage'
 import { db, storage } from './config'
 import { parseCSV, detectCols } from '../utils/csvUtils'
 
@@ -31,16 +31,21 @@ export async function getVoterCSVDownloadURL() {
   return getDownloadURL(ref(storage, 'voter_imports/latest.csv'))
 }
 
+// Download the latest CSV text using Firebase SDK (no CORS issues, no fetch needed)
+export async function downloadVoterCSVFromStorage() {
+  const blob = await getBlob(ref(storage, 'voter_imports/latest.csv'))
+  return blob.text()
+}
+
 // Rebuild booths collection from the Storage CSV backup.
 // Called automatically when fetchAllBooths() returns empty but a CSV backup exists.
 // Returns the rebuilt booth array, or [] if no backup found.
 export async function recoverBoothsFromStorage() {
-  let url
-  try { url = await getDownloadURL(ref(storage, 'voter_imports/latest.csv')) } catch { return [] }
-
-  const res = await fetch(url)
-  if (!res.ok) return []
-  const text = await res.text()
+  let text
+  try {
+    const blob = await getBlob(ref(storage, 'voter_imports/latest.csv'))
+    text = await blob.text()
+  } catch { return [] }
 
   const { headers, voters } = parseCSV(text)
   if (voters.length === 0) return []
