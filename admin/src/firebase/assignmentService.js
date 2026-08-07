@@ -6,9 +6,9 @@ import { db } from './config'
 
 const COL = 'assignments'
 
-export function subscribeAssignments(cb) {
+export function subscribeAssignments(cb, onError) {
   const q = query(collection(db, COL), orderBy('_createdAt', 'desc'))
-  return onSnapshot(q, snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+  return onSnapshot(q, snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onError)
 }
 
 export async function createAssignment(data) {

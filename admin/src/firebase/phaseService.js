@@ -6,9 +6,9 @@ import { db } from './config'
 
 const COL = 'phases'
 
-export function subscribePhases(cb) {
+export function subscribePhases(cb, onError) {
   const q = query(collection(db, COL), orderBy('_createdAt', 'desc'))
-  return onSnapshot(q, snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+  return onSnapshot(q, snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onError)
 }
 
 export async function createPhase(data) {

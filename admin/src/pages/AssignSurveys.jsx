@@ -333,15 +333,18 @@ export default function AssignSurveys() {
   const [drawer, setDrawer]             = useState(null)
   const [showCreate, setShowCreate]     = useState(false)
 
-  useEffect(() => subscribePhases(data => {
-    setPhases(data)
-    setPhaseId(prev => prev || data[0]?.id || '')
-  }), [])
-  useEffect(() => subscribeSurveyForms(data => setSurveyForms(data)), [])
-  useEffect(() => subscribeAssignments(data => {
-    setAssignments(data)
-    if (drawer) setDrawer(data.find(a => a.id === drawer.id) || null)
-  }), [])
+  useEffect(() => subscribePhases(
+    data => { setPhases(data); setPhaseId(prev => prev || data[0]?.id || '') },
+    err  => console.error('[AssignSurveys] phases error:', err)
+  ), [])
+  useEffect(() => subscribeSurveyForms(
+    data => setSurveyForms(data),
+    err  => console.error('[AssignSurveys] surveys error:', err)
+  ), [])
+  useEffect(() => subscribeAssignments(
+    data => { setAssignments(data); if (drawer) setDrawer(data.find(a => a.id === drawer.id) || null) },
+    err  => console.error('[AssignSurveys] assignments error:', err)
+  ), [])
 
   const selectedPhase = phases.find(p => p.id === selectedPhaseId)
   const phaseStatusCfg = PHASE_STATUS_CFG[selectedPhase?.status] || PHASE_STATUS_CFG.Upcoming

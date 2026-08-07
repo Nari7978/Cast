@@ -6,9 +6,9 @@ import { db } from './config'
 
 const COL = 'agents'
 
-export function subscribeAgents(cb) {
+export function subscribeAgents(cb, onError) {
   const q = query(collection(db, COL), orderBy('_createdAt', 'desc'))
-  return onSnapshot(q, snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+  return onSnapshot(q, snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onError)
 }
 
 export async function createAgent(data) {
