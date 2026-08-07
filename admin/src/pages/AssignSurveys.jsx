@@ -72,7 +72,6 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, bo
   const [rangeFrom, setRF]  = useState('')
   const [rangeTo, setRT]    = useState('')
   const [errors, setErrors] = useState({})
-  const [saving, setSaving] = useState(false)
 
   const selectedPhase = phases.find(p => p.id === phaseId)
   const selectedForm  = surveyForms.find(f => f.id === formId)
@@ -120,17 +119,12 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, bo
     if (step === 2 && !validateStep2()) return
     setStep(s => s + 1)
   }
-  async function save() {
+  function save() {
     if (!validateStep3()) return
-    setSaving(true)
-    try {
-      await onSave({ name, phaseId, formId, boothRange: 'Custom', boothCount: selBooths.size, agentCount: selBooths.size, status: 'Active', notes: '' })
-    } catch (e) {
-      console.error('Failed to save assignment:', e)
-    } finally {
-      setSaving(false)
-      onClose()
-    }
+    // Close instantly — Firestore write runs in background, onSnapshot updates the list
+    onClose()
+    onSave({ name, phaseId, formId, boothRange: 'Custom', boothCount: selBooths.size, agentCount: selBooths.size, status: 'Active', notes: '' })
+      .catch(e => console.error('Failed to save assignment:', e))
   }
 
   return (
@@ -315,7 +309,7 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, bo
             <button onClick={onClose} className="px-4 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">Cancel</button>
             {step < 3
               ? <button onClick={next} className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity" style={{ background: 'linear-gradient(135deg,#5B5CEB,#818CF8)' }}>Next <ChevronRight size={14} /></button>
-              : <button onClick={save} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-70" style={{ background: 'linear-gradient(135deg,#5B5CEB,#818CF8)' }}>{saving && <Loader2 size={13} className="animate-spin" />}{saving ? 'Saving…' : 'Create Assignment'}</button>
+              : <button onClick={save} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity" style={{ background: 'linear-gradient(135deg,#5B5CEB,#818CF8)' }}>Create Assignment</button>
             }
           </div>
         </div>
