@@ -64,10 +64,30 @@ function parseCSV(text) {
   return { headers: rawHeaders, voters }
 }
 
-// Detect which column holds booth numbers and polling station names
-function detectCols(headers) {
-  const boothCol   = headers.find(h => /BOOTH|PART_NO|WARD_NO/.test(h)) || 'BOOTH_NO'
-  const stationCol = headers.find(h => /STATION|POLLING/.test(h))       || 'POLLING_STATION'
+// Detect which column holds booth numbers and polling station names.
+// Booth column must have numeric values — skip any column whose values are school/place names.
+function detectCols(headers, sampleRows = []) {
+  // Station: prefers explicit POLLING_STATION, then any STATION/POLLING column
+  const stationCol = headers.find(h => /^POLLING_STATION$/.test(h))
+    || headers.find(h => /STATION|POLLING/.test(h))
+    || 'POLLING_STATION'
+
+  // Booth candidates: exclude name/station/location-like columns
+  const boothCandidates = headers.filter(h =>
+    /BOOTH_NO|PART_NO|WARD_NO/.test(h) ||
+    (/BOOTH/.test(h) && !/NAME|STATION|LOCATION|ADDRESS/.test(h))
+  )
+
+  let boothCol = null
+  if (sampleRows.length > 0) {
+    // Prefer the candidate whose values are all numeric
+    boothCol = boothCandidates.find(h => {
+      const vals = sampleRows.slice(0, 30).map(v => String(v[h] || '').trim()).filter(Boolean)
+      return vals.length > 0 && vals.every(v => /^\d+$/.test(v))
+    })
+  }
+  boothCol = boothCol || boothCandidates[0] || 'BOOTH_NO'
+
   return { boothCol, stationCol }
 }
 
@@ -206,7 +226,7 @@ export default function Voters() {
     // 1. Parse CSV
     const text = await file.text()
     const { headers, voters: parsed } = parseCSV(text)
-    const { boothCol, stationCol } = detectCols(headers)
+    const { boothCol, stationCol } = detectCols(headers, parsed.slice(0, 50))
 
     // 2. Show table immediately
     setVoters(parsed)
@@ -252,8 +272,10 @@ export default function Voters() {
   }, [])
 
   // ── Detected column names from meta ────
-  const boothCol   = importMeta?.boothCol   || csvHeaders.find(h => /BOOTH|PART_NO|WARD_NO/.test(h)) || 'BOOTH_NO'
-  const stationCol = importMeta?.stationCol || csvHeaders.find(h => /STATION|POLLING/.test(h))       || 'POLLING_STATION'
+  const { boothCol, stationCol } = useMemo(() => {
+    if (importMeta?.boothCol) return { boothCol: importMeta.boothCol, stationCol: importMeta.stationCol }
+    return detectCols(csvHeaders, voters.slice(0, 50))
+  }, [importMeta, csvHeaders, voters])
 
   // ── Derived filter options (from in-memory voters) ────
   const allStations = useMemo(() =>
@@ -489,7 +511,7 @@ export default function Voters() {
                 <select value={filterBooth} onChange={e => { setFilterBooth(e.target.value); setPage(1) }}
                   className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-600 outline-none cursor-pointer" style={{ minWidth: 140 }}>
                   <option value="">Booth Number</option>
-                  {allBooths.map(b => <option key={b} value={b}>Booth {b}</option>)}
+                  {allBooths.map(b => <option key={b} value={b}>{/^\d+$/.test(b) ? `Booth ${b}` : b}</option>)}
                 </select>
                 <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
