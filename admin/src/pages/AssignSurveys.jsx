@@ -46,6 +46,8 @@ const PHASE_STATUS_CFG = {
 function fmt(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) }
 function fmtShort(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) }
 function uid() { return Date.now() + Math.random() }
+// questions field may be a count (number) or an array of question objects
+function qCount(f) { return Array.isArray(f?.questions) ? f.questions.length : (f?.questions ?? 0) }
 
 // ─── Step Indicator ───────────────────────────────────────────────────────────
 
@@ -190,7 +192,7 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms }) 
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-slate-700 text-[13px] font-medium">{f.name}</p>
-                        <p className="text-slate-400 text-[11px]">{f.questions} questions · {f.category}</p>
+                        <p className="text-slate-400 text-[11px]">{qCount(f)} questions · {f.category}</p>
                       </div>
                     </label>
                   ))}
@@ -281,7 +283,7 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms }) 
                   {[
                     ['Campaign Phase', selectedPhase?.name || '—'],
                     ['Survey Form',    selectedForm?.name  || '—'],
-                    ['Questions',      selectedForm ? `${selectedForm.questions} questions` : '—'],
+                    ['Questions',      selectedForm ? `${qCount(selectedForm)} questions` : '—'],
                     ['Selected Booths',   `${selBooths.size} booth${selBooths.size !== 1 ? 's' : ''}`],
                     ['Affected Agents',   `${selBooths.size} agent${selBooths.size !== 1 ? 's' : ''}`],
                   ].map(([k, v]) => (
@@ -513,7 +515,7 @@ export default function AssignSurveys() {
                           <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#EEF2FF' }}><FileText size={11} style={{ color: '#5B5CEB' }} /></div>
                           <div>
                             <p className="text-slate-700 font-medium text-[12px] whitespace-nowrap">{sf?.name || '—'}</p>
-                            <p className="text-slate-400 text-[11px]">{sf?.questions} Q</p>
+                            <p className="text-slate-400 text-[11px]">{qCount(sf)} Q</p>
                           </div>
                         </div>
                       </td>
@@ -603,7 +605,7 @@ export default function AssignSurveys() {
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#EEF2FF' }}><ClipboardList size={16} style={{ color: '#5B5CEB' }} /></div>
                     <div>
                       <p className="text-slate-700 font-semibold text-[13px]">{sf?.name || '—'}</p>
-                      <p className="text-slate-400 text-[11px]">{sf?.questions} questions · {sf?.category}</p>
+                      <p className="text-slate-400 text-[11px]">{qCount(sf)} questions · {sf?.category}</p>
                     </div>
                   </div>
                 </div>
@@ -641,7 +643,7 @@ export default function AssignSurveys() {
                     {[
                       { icon: MapPin,       label: `${drawer.boothCount} booths assigned` },
                       { icon: Users,        label: `${drawer.agentCount} agents automatically receive the survey` },
-                      { icon: ClipboardList,label: `Survey: ${sf?.name}` },
+                      { icon: ClipboardList,label: `Survey: ${sf?.name || '—'} (${qCount(sf)} Qs)` },
                       { icon: Activity,     label: 'Responses linked to Phase + Booth + Voter' },
                     ].map(({ icon: Icon, label }) => (
                       <div key={label} className="flex items-center gap-2.5 text-[12px] text-slate-500">
