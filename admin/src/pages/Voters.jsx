@@ -9,10 +9,12 @@ import {
   uploadVoterCSV, downloadVoterCSV,
   uploadBooths, fetchAllBooths,
   saveImportMeta, getImportMeta,
+  clearBooths, deleteImportMeta,
 } from '../firebase/voterService'
 import {
   cacheVoters, loadCachedVoters,
   cacheImportMeta, loadCachedImportMeta,
+  clearVoterCache,
 } from '../utils/voterCache'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -159,6 +161,8 @@ export default function Voters() {
   const [sort, setSort]                   = useState({ col: '', dir: 'asc' })
   const [page, setPage]                   = useState(1)
   const [drawerVoter, setDrawerVoter]     = useState(null)
+  const [showConfirmClear, setShowConfirmClear] = useState(false)
+  const [clearing, setClearing]                 = useState(false)
 
   // ── On mount: restore from IndexedDB (instant, no network) ────
   useEffect(() => {
@@ -320,6 +324,30 @@ export default function Voters() {
     return [page - 2, page - 1, page, page + 1, page + 2]
   }, [page, totalPages])
 
+  const handleClearAll = async () => {
+    setClearing(true)
+    try {
+      // Clear local caches first (instant)
+      await clearVoterCache()
+      localStorage.removeItem('cast_booths_cache')
+      // Clear Firestore data in background (best effort)
+      await Promise.allSettled([clearBooths(), deleteImportMeta()])
+    } finally {
+      // Reset all UI state regardless of Firestore outcome
+      setVoters([])
+      setCsvHeaders(DEFAULT_HEADERS)
+      setVisibleCols(new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
+      setHasFile(false)
+      setImportMeta(null)
+      setLoadStatus('idle')
+      setCloudStatus('idle')
+      setSearch(''); setFilterStation(''); setFilterBooth('')
+      setPage(1)
+      setClearing(false)
+      setShowConfirmClear(false)
+    }
+  }
+
   const handleSort = col => {
     setSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' })
     setPage(1)
@@ -448,9 +476,18 @@ export default function Voters() {
                   </div>
                 ))}
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0" style={{ background: '#ECFDF5' }}>
-                <CheckCircle2 size={13} style={{ color: '#10B981' }} />
-                <span className="text-[12px] font-semibold" style={{ color: '#10B981' }}>Ready</span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: '#ECFDF5' }}>
+                  <CheckCircle2 size={13} style={{ color: '#10B981' }} />
+                  <span className="text-[12px] font-semibold" style={{ color: '#10B981' }}>Ready</span>
+                </div>
+                <button
+                  onClick={() => setShowConfirmClear(true)}
+                  title="Delete all voter data"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-red-100 text-red-400 text-[12px] font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                >
+                  <Trash2 size={13} /> Delete
+                </button>
               </div>
             </div>
 
@@ -606,6 +643,34 @@ export default function Voters() {
           </>
         )}
       </div>
+
+      {/* ── Confirm Clear Modal ── */}
+      {showConfirmClear && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }}>
+          <div className="bg-white rounded-2xl border border-[#E8ECF4] p-7 flex flex-col items-center text-center" style={{ width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: '#FEF2F2' }}>
+              <Trash2 size={24} style={{ color: '#EF4444' }} />
+            </div>
+            <p className="text-slate-800 font-bold text-[17px] mb-1">Delete all voter data?</p>
+            <p className="text-slate-500 text-[13px] leading-relaxed mb-1">
+              This will permanently remove <strong>{voters.length.toLocaleString()} voters</strong>, all booth data, and the cloud backup.
+            </p>
+            <p className="text-slate-400 text-[12px] mb-6">You will need to re-import a CSV to restore the data.</p>
+            <div className="flex gap-3 w-full">
+              <button onClick={() => setShowConfirmClear(false)} disabled={clearing}
+                className="flex-1 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleClearAll} disabled={clearing}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg,#EF4444,#F87171)' }}>
+                {clearing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                {clearing ? 'Deleting…' : 'Yes, delete all'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Voter Drawer */}
       {drawerVoter && (

@@ -1,6 +1,6 @@
 import {
   collection, doc, writeBatch, serverTimestamp,
-  setDoc, getDoc, getDocs,
+  setDoc, getDoc, getDocs, deleteDoc,
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from './config'
@@ -26,8 +26,8 @@ export async function downloadVoterCSV(url) {
 
 // ── Booths (small collection, kept in Firestore) ─────────────────────────────
 
-// Delete all existing booth docs before re-writing — prevents duplicates on re-upload.
-async function clearBooths() {
+// Delete all existing booth docs — used both before re-upload and when clearing all data.
+export async function clearBooths() {
   const snap = await getDocs(collection(db, 'booths'))
   if (snap.empty) return
   for (let i = 0; i < snap.docs.length; i += CHUNK_SIZE) {
@@ -79,4 +79,8 @@ export async function saveImportMeta(meta) {
 export async function getImportMeta() {
   const snap = await getDoc(doc(db, 'voter_imports', 'latest'))
   return snap.exists() ? snap.data() : null
+}
+
+export async function deleteImportMeta() {
+  await deleteDoc(doc(db, 'voter_imports', 'latest'))
 }

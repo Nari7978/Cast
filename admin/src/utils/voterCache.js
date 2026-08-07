@@ -51,6 +51,15 @@ export function cacheImportMeta(meta) {
 export function loadCachedImportMeta() {
   try { return JSON.parse(localStorage.getItem(META_KEY)) } catch { return null }
 }
-export function clearVoterCache() {
+export async function clearVoterCache() {
   localStorage.removeItem(META_KEY)
+  try {
+    const db = await openDB()
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(VOTER_STORE, 'readwrite')
+      tx.objectStore(VOTER_STORE).clear()
+      tx.oncomplete = () => resolve()
+      tx.onerror    = e => reject(e.target.error)
+    })
+  } catch {}
 }
