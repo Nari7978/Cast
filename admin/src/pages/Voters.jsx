@@ -16,6 +16,7 @@ import {
   cacheImportMeta, loadCachedImportMeta,
   clearVoterCache,
 } from '../utils/voterCache'
+import { parseCSV, detectCols } from '../utils/csvUtils'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -36,62 +37,6 @@ const PAGE_SIZE    = 25
 const GENDER_COLOR = { Male: '#5B5CEB', Female: '#EC4899', Other: '#10B981' }
 const GENDER_BG    = { Male: '#EEF2FF', Female: '#FDF2F8', Other: '#ECFDF5' }
 const CASTE_COLOR  = { General: '#06B6D4', OBC: '#F59E0B', SC: '#8B5CF6', ST: '#10B981' }
-
-// ─── CSV Parser ───────────────────────────────────────────────────────────────
-
-function normalizeKey(h) {
-  return h.toUpperCase().trim().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '')
-}
-function parseRow(line) {
-  const result = []; let inQuote = false, cur = ''
-  for (const c of line) {
-    if (c === '"') inQuote = !inQuote
-    else if (c === ',' && !inQuote) { result.push(cur.trim()); cur = '' }
-    else cur += c
-  }
-  result.push(cur.trim()); return result
-}
-function parseCSV(text) {
-  const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim())
-  if (lines.length < 2) return { headers: DEFAULT_HEADERS, voters: [] }
-  const rawHeaders = parseRow(lines[0]).map(normalizeKey)
-  const voters = []
-  for (let i = 1; i < lines.length; i++) {
-    const cols = parseRow(lines[i])
-    if (!cols.some(c => c)) continue
-    const voter = { _id: i }
-    rawHeaders.forEach((h, idx) => { voter[h] = cols[idx] || '' })
-    voters.push(voter)
-  }
-  return { headers: rawHeaders, voters }
-}
-
-// Detect which column holds booth numbers and polling station names.
-// Booth column must have numeric values — skip any column whose values are school/place names.
-function detectCols(headers, sampleRows = []) {
-  // Station: prefers explicit POLLING_STATION, then any STATION/POLLING column
-  const stationCol = headers.find(h => /^POLLING_STATION$/.test(h))
-    || headers.find(h => /STATION|POLLING/.test(h))
-    || 'POLLING_STATION'
-
-  // Booth candidates: exclude name/station/location-like columns
-  const boothCandidates = headers.filter(h =>
-    /BOOTH_NO|PART_NO|WARD_NO/.test(h) ||
-    (/BOOTH/.test(h) && !/NAME|STATION|LOCATION|ADDRESS/.test(h))
-  )
-
-  let boothCol = null
-  if (sampleRows.length > 0) {
-    // Prefer the candidate whose values are all numeric
-    boothCol = boothCandidates.find(h => {
-      const vals = sampleRows.slice(0, 30).map(v => String(v[h] || '').trim()).filter(Boolean)
-      return vals.length > 0 && vals.every(v => /^\d+$/.test(v))
-    })
-  }
-  boothCol = boothCol || boothCandidates[0] || 'BOOTH_NO'
-
-  return { boothCol, stationCol }
-}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 

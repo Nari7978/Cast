@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from './config'
+import { parseCSV, detectCols } from '../utils/csvUtils'
 
 const CHUNK_SIZE = 400
 
@@ -41,32 +42,18 @@ export async function recoverBoothsFromStorage() {
   if (!res.ok) return []
   const text = await res.text()
 
-  // Minimal CSV parse — only need header + two columns
-  const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim())
-  if (lines.length < 2) return []
+  const { headers, voters } = parseCSV(text)
+  if (voters.length === 0) return []
 
-  const rawHeaders = lines[0].split(',').map(h => h.toUpperCase().trim().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, ''))
-
-  // Detect booth + station columns (same logic as Voters page)
-  const boothCol = rawHeaders.find(h => /^BOOTH_NO$/.test(h))
-    || rawHeaders.find(h => /BOOTH_NO|PART_NO/.test(h) && !/NAME|STATION/.test(h))
-    || 'BOOTH_NO'
-  const stationCol = rawHeaders.find(h => /^POLLING_STATION$/.test(h))
-    || rawHeaders.find(h => /STATION|POLLING/.test(h))
-    || 'POLLING_STATION'
-
-  const boothIdx   = rawHeaders.indexOf(boothCol)
-  const stationIdx = rawHeaders.indexOf(stationCol)
-  if (boothIdx === -1) return []
+  const { boothCol, stationCol } = detectCols(headers, voters.slice(0, 50))
 
   const boothMap = {}
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',')
-    const key  = (cols[boothIdx] || '').trim()
-    if (!key) continue
-    if (!boothMap[key]) boothMap[key] = { boothNo: key, pollingStation: (cols[stationIdx] || '').trim(), voterCount: 0 }
+  voters.forEach(v => {
+    const key = String(v[boothCol] || '').trim()
+    if (!key) return
+    if (!boothMap[key]) boothMap[key] = { boothNo: key, pollingStation: v[stationCol] || '', voterCount: 0 }
     boothMap[key].voterCount++
-  }
+  })
 
   const entries = Object.values(boothMap)
   if (entries.length === 0) return []

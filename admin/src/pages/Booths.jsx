@@ -170,20 +170,21 @@ export default function Booths() {
   const [page,            setPage]            = useState(1)
 
   useEffect(() => {
-    fetchAllBooths().then(async data => {
-      if (data.length > 0) {
-        setBooths(data)
-        setLoading(false)
-      } else {
-        // Firestore empty — try rebuilding from Storage CSV backup
-        const recovered = await recoverBoothsFromStorage().catch(() => [])
-        setBooths(recovered)
-        setLoading(false)
+    let active = true
+    async function load() {
+      try {
+        let data = await fetchAllBooths()
+        if (data.length === 0) data = await recoverBoothsFromStorage()
+        if (active) setBooths(data)
+      } catch {
+        // silently show empty state
+      } finally {
+        if (active) setLoading(false)
       }
-    }).catch(() => setLoading(false))
-
-    const unsub = subscribeAgents(data => setAgents(data))
-    return unsub
+    }
+    load()
+    const unsub = subscribeAgents(data => { if (active) setAgents(data) })
+    return () => { active = false; unsub() }
   }, [])
 
   // ── Agent lookup by boothNo ────
