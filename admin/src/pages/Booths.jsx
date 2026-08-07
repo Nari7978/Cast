@@ -5,7 +5,7 @@ import {
   AlertCircle, Eye, Edit2, Trash2, X, ChevronDown,
   Building2, Phone, ChevronLeft, ChevronRight, Loader2,
 } from 'lucide-react'
-import { fetchAllBooths } from '../firebase/voterService'
+import { fetchAllBooths, recoverBoothsFromStorage } from '../firebase/voterService'
 import { subscribeAgents } from '../firebase/agentService'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -170,9 +170,17 @@ export default function Booths() {
   const [page,            setPage]            = useState(1)
 
   useEffect(() => {
-    fetchAllBooths()
-      .then(data => { setBooths(data); setLoading(false) })
-      .catch(() => setLoading(false))
+    fetchAllBooths().then(async data => {
+      if (data.length > 0) {
+        setBooths(data)
+        setLoading(false)
+      } else {
+        // Firestore empty — try rebuilding from Storage CSV backup
+        const recovered = await recoverBoothsFromStorage().catch(() => [])
+        setBooths(recovered)
+        setLoading(false)
+      }
+    }).catch(() => setLoading(false))
 
     const unsub = subscribeAgents(data => setAgents(data))
     return unsub

@@ -30,6 +30,57 @@ export async function getVoterCSVDownloadURL() {
   return getDownloadURL(ref(storage, 'voter_imports/latest.csv'))
 }
 
+// Rebuild booths collection from the Storage CSV backup.
+// Called automatically when fetchAllBooths() returns empty but a CSV backup exists.
+// Returns the rebuilt booth array, or [] if no backup found.
+export async function recoverBoothsFromStorage() {
+  let url
+  try { url = await getDownloadURL(ref(storage, 'voter_imports/latest.csv')) } catch { return [] }
+
+  const res = await fetch(url)
+  if (!res.ok) return []
+  const text = await res.text()
+
+  // Minimal CSV parse — only need header + two columns
+  const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim())
+  if (lines.length < 2) return []
+
+  const rawHeaders = lines[0].split(',').map(h => h.toUpperCase().trim().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, ''))
+
+  // Detect booth + station columns (same logic as Voters page)
+  const boothCol = rawHeaders.find(h => /^BOOTH_NO$/.test(h))
+    || rawHeaders.find(h => /BOOTH_NO|PART_NO/.test(h) && !/NAME|STATION/.test(h))
+    || 'BOOTH_NO'
+  const stationCol = rawHeaders.find(h => /^POLLING_STATION$/.test(h))
+    || rawHeaders.find(h => /STATION|POLLING/.test(h))
+    || 'POLLING_STATION'
+
+  const boothIdx   = rawHeaders.indexOf(boothCol)
+  const stationIdx = rawHeaders.indexOf(stationCol)
+  if (boothIdx === -1) return []
+
+  const boothMap = {}
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',')
+    const key  = (cols[boothIdx] || '').trim()
+    if (!key) continue
+    if (!boothMap[key]) boothMap[key] = { boothNo: key, pollingStation: (cols[stationIdx] || '').trim(), voterCount: 0 }
+    boothMap[key].voterCount++
+  }
+
+  const entries = Object.values(boothMap)
+  if (entries.length === 0) return []
+
+  // Write back to Firestore
+  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+    const batch = writeBatch(db)
+    entries.slice(i, i + CHUNK_SIZE).forEach(booth => batch.set(doc(db, 'booths', booth.boothNo), booth))
+    await batch.commit()
+  }
+
+  return entries.sort((a, b) => Number(a.boothNo) - Number(b.boothNo))
+}
+
 // ── Booths (small collection, kept in Firestore) ─────────────────────────────
 
 // Delete all existing booth docs — used both before re-upload and when clearing all data.
