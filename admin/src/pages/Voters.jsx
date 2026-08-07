@@ -6,7 +6,6 @@ import {
   AlertCircle, Cloud,
 } from 'lucide-react'
 import {
-  uploadVoterCSV,
   uploadBooths,
   saveImportMeta,
   deleteImportMeta,
@@ -175,10 +174,9 @@ export default function Voters() {
     // 4. Cloud backup in background (optional but enables cross-device access)
     setCloudStatus('uploading')
     Promise.all([
-      uploadVoterCSV(file),
       uploadBooths(parsed, boothCol, stationCol),
-    ]).then(async () => {
-      await saveImportMeta(meta)
+      saveImportMeta(meta),
+    ]).then(() => {
       setCloudStatus('done')
     }).catch(() => setCloudStatus('error'))
   }, [])
