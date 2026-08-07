@@ -25,13 +25,13 @@ export async function downloadVoterCSV(url) {
 }
 
 // ── Booths (small collection, kept in Firestore) ─────────────────────────────
-export async function uploadBooths(voters) {
+export async function uploadBooths(voters, boothCol = 'BOOTH_NO', stationCol = 'POLLING_STATION') {
   const boothMap = {}
   voters.forEach(v => {
-    const key = String(v.BOOTH_NO || '').trim()
+    const key = String(v[boothCol] || '').trim()
     if (!key) return
     if (!boothMap[key]) {
-      boothMap[key] = { boothNo: key, pollingStation: v.POLLING_STATION || '', voterCount: 0 }
+      boothMap[key] = { boothNo: key, pollingStation: v[stationCol] || '', voterCount: 0 }
     }
     boothMap[key].voterCount++
   })

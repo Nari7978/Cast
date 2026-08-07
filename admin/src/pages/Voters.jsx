@@ -168,9 +168,14 @@ export default function Voters() {
     if (!file) return
     e.target.value = ''
 
-    // 1. Parse locally for instant table display
+    // 1. Parse locally — table shows immediately
     const text = await file.text()
     const { headers, voters: parsed } = parseCSV(text)
+
+    // Auto-detect booth / station columns regardless of CSV naming convention
+    const boothCol   = headers.find(h => /BOOTH|PART_NO|WARD_NO/.test(h)) || 'BOOTH_NO'
+    const stationCol = headers.find(h => /STATION|POLLING/.test(h))       || 'POLLING_STATION'
+
     setVoters(parsed)
     setCsvHeaders(headers)
     setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
@@ -179,8 +184,8 @@ export default function Voters() {
     setPage(1)
     setSearch(''); setFilterStation(''); setFilterBooth('')
 
-    const boothSet   = new Set(parsed.map(v => v.BOOTH_NO).filter(Boolean))
-    const stationSet = new Set(parsed.map(v => v.POLLING_STATION).filter(Boolean))
+    const boothSet   = new Set(parsed.map(v => v[boothCol]).filter(Boolean))
+    const stationSet = new Set(parsed.map(v => v[stationCol]).filter(Boolean))
     const now = new Date()
     const meta = {
       name: file.name,
@@ -188,17 +193,22 @@ export default function Voters() {
       records: parsed.length,
       booths: boothSet.size,
       stations: stationSet.size,
+      boothCol,
+      stationCol,
     }
     setImportMeta(meta)
 
-    // 2. Upload CSV + booths in background (non-blocking)
+    // 2. Save meta immediately (storageUrl pending) so navigating away doesn't lose the record
+    await saveImportMeta({ ...meta, storageUrl: null })
+
+    // 3. Upload CSV file + booths in background
     setUploadStatus('uploading')
     try {
-      const [storageUrl, booths] = await Promise.all([
-        uploadVoterCSV(file),
-        uploadBooths(parsed).then(() => fetchAllBooths()),
-      ])
+      const storageUrl = await uploadVoterCSV(file)
+      await uploadBooths(parsed, boothCol, stationCol)
+      const booths = await fetchAllBooths()
       setBoothsList(booths)
+      // Update meta with completed storageUrl
       await saveImportMeta({ ...meta, storageUrl })
       setUploadStatus('done')
     } catch(err) {
@@ -207,21 +217,25 @@ export default function Voters() {
     }
   }, [])
 
+  // Detected column names — read from meta (persisted) or derived from CSV headers
+  const boothCol   = importMeta?.boothCol   || csvHeaders.find(h => /BOOTH|PART_NO|WARD_NO/.test(h)) || 'BOOTH_NO'
+  const stationCol = importMeta?.stationCol || csvHeaders.find(h => /STATION|POLLING/.test(h))       || 'POLLING_STATION'
+
   // ── Derived filter options ────
   const allStations = useMemo(() => {
     if (boothsList.length)
       return [...new Set(boothsList.map(b => b.pollingStation))].filter(Boolean).sort()
-    return [...new Set(voters.map(v => v.POLLING_STATION))].filter(Boolean).sort()
-  }, [voters, boothsList])
+    return [...new Set(voters.map(v => v[stationCol]))].filter(Boolean).sort()
+  }, [voters, boothsList, stationCol])
 
   const allBooths = useMemo(() => {
     if (boothsList.length) {
       const base = filterStation ? boothsList.filter(b => b.pollingStation === filterStation) : boothsList
       return base.map(b => b.boothNo)
     }
-    const base = filterStation ? voters.filter(v => v.POLLING_STATION === filterStation) : voters
-    return [...new Set(base.map(v => v.BOOTH_NO))].filter(Boolean).sort()
-  }, [voters, boothsList, filterStation])
+    const base = filterStation ? voters.filter(v => v[stationCol] === filterStation) : voters
+    return [...new Set(base.map(v => v[boothCol]))].filter(Boolean).sort((a, b) => Number(a) - Number(b))
+  }, [voters, boothsList, filterStation, boothCol, stationCol])
 
   // ── Filtered + sorted + paged (all client-side — data is in memory) ────
   const filtered = useMemo(() => {
@@ -230,8 +244,8 @@ export default function Voters() {
       const q = search.toLowerCase()
       data = data.filter(v => csvHeaders.some(h => String(v[h] ?? '').toLowerCase().includes(q)))
     }
-    if (filterStation) data = data.filter(v => v.POLLING_STATION === filterStation)
-    if (filterBooth)   data = data.filter(v => v.BOOTH_NO === filterBooth)
+    if (filterStation) data = data.filter(v => v[stationCol] === filterStation)
+    if (filterBooth)   data = data.filter(v => v[boothCol]   === filterBooth)
     if (sort.col) {
       data = [...data].sort((a, b) => {
         const av = String(a[sort.col] ?? ''), bv = String(b[sort.col] ?? '')
