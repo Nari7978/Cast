@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Plus, Search, Download, X, Edit2, Archive, Eye,
   ChevronDown, ChevronLeft, ChevronRight,
@@ -8,105 +8,7 @@ import {
   Target, TrendingUp, Activity, Layers,
 } from 'lucide-react'
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const SURVEY_FORMS = [
-  { id: 1, name: 'Door-to-Door Survey',       questions: 15, status: 'Active' },
-  { id: 2, name: 'Beneficiary Verification',  questions: 12, status: 'Active' },
-  { id: 3, name: 'Issue Collection Form',     questions: 8,  status: 'Active' },
-  { id: 4, name: 'Opinion Poll',              questions: 10, status: 'Active' },
-  { id: 5, name: 'Candidate Feedback',        questions: 7,  status: 'Draft'  },
-  { id: 6, name: 'Exit Poll Survey',          questions: 6,  status: 'Active' },
-]
-
-const ALL_BOOTHS_COUNT = 412
-
-const PHASES = [
-  {
-    id: 1,
-    name: 'Door-to-Door Campaign',
-    description: 'Initial voter outreach and household survey for all constituencies.',
-    color: '#5B5CEB',
-    startDate: '2026-05-01', endDate: '2026-05-15',
-    status: 'Completed',
-    surveyForms: [1, 2],
-    booths: 412, agentsAssigned: 398, completedBooths: 412, pendingBooths: 0,
-    responses: 85642,
-    createdAt: '2026-04-20',
-    notes: 'Phase 1 completed successfully. All booths covered.',
-    timeline: ['2026-04-20', '2026-04-22', '2026-04-25', '2026-05-01', '2026-05-03', '2026-05-15'],
-  },
-  {
-    id: 2,
-    name: 'Issue Collection',
-    description: 'Collect primary voter concerns and local infrastructure issues.',
-    color: '#10B981',
-    startDate: '2026-05-18', endDate: '2026-06-01',
-    status: 'Completed',
-    surveyForms: [3],
-    booths: 380, agentsAssigned: 365, completedBooths: 380, pendingBooths: 0,
-    responses: 62340,
-    createdAt: '2026-05-10',
-    notes: 'Top issues: Roads, Water, Employment.',
-    timeline: ['2026-05-10', '2026-05-12', '2026-05-15', '2026-05-18', '2026-05-20', '2026-06-01'],
-  },
-  {
-    id: 3,
-    name: 'Beneficiary Verification',
-    description: 'Verify government scheme beneficiaries across all booths.',
-    color: '#F59E0B',
-    startDate: '2026-06-05', endDate: '2026-06-20',
-    status: 'Completed',
-    surveyForms: [2],
-    booths: 412, agentsAssigned: 400, completedBooths: 412, pendingBooths: 0,
-    responses: 71820,
-    createdAt: '2026-05-28',
-    notes: 'Verified 71,820 beneficiaries. 8.2% discrepancy found.',
-    timeline: ['2026-05-28', '2026-05-30', '2026-06-02', '2026-06-05', '2026-06-07', '2026-06-20'],
-  },
-  {
-    id: 4,
-    name: 'Opinion Poll',
-    description: 'Gauge voter sentiment and candidate preference ahead of elections.',
-    color: '#8B5CF6',
-    startDate: '2026-07-01', endDate: '2026-07-20',
-    status: 'Active',
-    surveyForms: [4],
-    booths: 412, agentsAssigned: 412, completedBooths: 298, pendingBooths: 114,
-    responses: 48210,
-    createdAt: '2026-06-20',
-    notes: 'Phase currently in progress. 72% booths completed.',
-    timeline: ['2026-06-20', '2026-06-23', '2026-06-28', '2026-07-01', '2026-07-03', null],
-  },
-  {
-    id: 5,
-    name: 'Candidate Feedback',
-    description: 'Collect voter feedback on candidate performance and visibility.',
-    color: '#EC4899',
-    startDate: '2026-08-01', endDate: '2026-08-15',
-    status: 'Active',
-    surveyForms: [5],
-    booths: 350, agentsAssigned: 320, completedBooths: 42, pendingBooths: 308,
-    responses: 7340,
-    createdAt: '2026-07-20',
-    notes: '',
-    timeline: ['2026-07-20', '2026-07-24', '2026-07-28', '2026-08-01', '2026-08-02', null],
-  },
-  {
-    id: 6,
-    name: 'Exit Poll',
-    description: 'Post-election sentiment and voting preference survey.',
-    color: '#06B6D4',
-    startDate: '2026-09-01', endDate: '2026-09-05',
-    status: 'Upcoming',
-    surveyForms: [6],
-    booths: 412, agentsAssigned: 0, completedBooths: 0, pendingBooths: 412,
-    responses: 0,
-    createdAt: '2026-07-15',
-    notes: 'Planned for election day.',
-    timeline: ['2026-07-15', null, null, null, null, null],
-  },
-]
+import { subscribePhases, createPhase, updatePhase } from '../firebase/phaseService'
 
 const STATUS_CONFIG = {
   Active:    { color: '#10B981', bg: '#ECFDF5', icon: Activity,      label: 'Active'    },
@@ -139,7 +41,7 @@ const COLOR_PRESETS = ['#5B5CEB','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Phases() {
-  const [phases, setPhases]         = useState(PHASES)
+  const [phases, setPhases]         = useState([])
   const [search, setSearch]         = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [drawerPhase, setDrawerPhase]   = useState(null)
@@ -149,6 +51,12 @@ export default function Phases() {
   const [formErrors, setFormErrors]     = useState({})
   const [showBoothDialog, setShowBoothDialog] = useState(false)
   const [boothSearch, setBoothSearch]         = useState('')
+
+  useEffect(() => subscribePhases(data => setPhases(data)), [])
+
+  useEffect(() => {
+    if (drawerPhase) setDrawerPhase(phases.find(p => p.id === drawerPhase.id) || null)
+  }, [phases])
 
   // ── summary counts ────
   const counts = useMemo(() => ({
@@ -187,31 +95,22 @@ export default function Phases() {
   }
 
   // ── validate + save ────
-  function saveForm() {
+  async function saveForm() {
     const errors = {}
     if (!form.name.trim()) errors.name = 'Phase name is required'
     if (form.startDate && form.endDate && form.endDate < form.startDate) errors.endDate = 'End date must be after start date'
     if (Object.keys(errors).length) { setFormErrors(errors); return }
 
     if (editingPhase) {
-      setPhases(prev => prev.map(p => p.id === editingPhase.id ? { ...p, ...form } : p))
-      if (drawerPhase?.id === editingPhase.id) setDrawerPhase(prev => ({ ...prev, ...form }))
+      await updatePhase(editingPhase.id, form)
     } else {
-      const newPhase = {
-        id: Date.now(), ...form,
-        surveyForms: [], booths: 0, agentsAssigned: 0,
-        completedBooths: 0, pendingBooths: 0, responses: 0,
-        createdAt: new Date().toISOString().slice(0, 10),
-        timeline: [new Date().toISOString().slice(0, 10), null, null, null, null, null],
-      }
-      setPhases(prev => [newPhase, ...prev])
+      await createPhase(form)
     }
     setShowForm(false)
   }
 
-  function archivePhase(phase) {
-    setPhases(prev => prev.map(p => p.id === phase.id ? { ...p, status: 'Archived' } : p))
-    if (drawerPhase?.id === phase.id) setDrawerPhase(prev => ({ ...prev, status: 'Archived' }))
+  async function archivePhase(phase) {
+    await updatePhase(phase.id, { status: 'Archived' })
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -491,28 +390,20 @@ export default function Phases() {
                     <Plus size={12} /> Add Form
                   </button>
                 </div>
-                {drawerPhase.surveyForms.length === 0 ? (
+                {(drawerPhase.surveyForms || []).length === 0 ? (
                   <p className="text-slate-400 text-[12px] py-2">No survey forms linked.</p>
                 ) : (
                   <div className="space-y-2">
-                    {drawerPhase.surveyForms.map(fid => {
-                      const sf = SURVEY_FORMS.find(f => f.id === fid)
-                      if (!sf) return null
-                      const ssc = STATUS_CONFIG[sf.status] || STATUS_CONFIG.Draft
-                      return (
-                        <div key={fid} className="flex items-center gap-3 p-3 rounded-xl border border-[#E8ECF4] hover:border-slate-200 transition-colors">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#EEF2FF' }}>
-                            <ClipboardList size={14} style={{ color: '#5B5CEB' }} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-slate-700 font-semibold text-[13px]">{sf.name}</p>
-                            <p className="text-slate-400 text-[11px]">{sf.questions} Questions</p>
-                          </div>
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: ssc.color, background: ssc.bg }}>{sf.status}</span>
-                          <button className="p-1 rounded text-slate-300 hover:text-red-400 transition-colors"><Trash2 size={12} /></button>
+                    {drawerPhase.surveyForms.map((fid, idx) => (
+                      <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-[#E8ECF4] hover:border-slate-200 transition-colors">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#EEF2FF' }}>
+                          <ClipboardList size={14} style={{ color: '#5B5CEB' }} />
                         </div>
-                      )
-                    })}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-slate-700 font-semibold text-[13px]">{String(fid)}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

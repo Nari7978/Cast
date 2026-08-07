@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Plus, Search, X, Edit2, Trash2, Eye, Copy, Download,
   ChevronDown, ChevronLeft, ChevronRight, CheckCircle2,
@@ -6,26 +6,11 @@ import {
   Calendar, FileText, Target, AlertCircle,
 } from 'lucide-react'
 
-// ─── Mock Reference Data ──────────────────────────────────────────────────────
+import { subscribePhases } from '../firebase/phaseService'
+import { subscribeSurveyForms } from '../firebase/surveyService'
+import { subscribeAssignments, createAssignment, deleteAssignment as deleteAssignmentSvc } from '../firebase/assignmentService'
 
-const PHASES = [
-  { id: 1, name: 'Door-to-Door Campaign',   status: 'Active',    start: '2026-05-01', end: '2026-05-15', totalBooths: 412, color: '#5B5CEB' },
-  { id: 2, name: 'Issue Collection',         status: 'Completed', start: '2026-05-18', end: '2026-06-01', totalBooths: 380, color: '#10B981' },
-  { id: 3, name: 'Beneficiary Verification', status: 'Completed', start: '2026-06-05', end: '2026-06-20', totalBooths: 412, color: '#F59E0B' },
-  { id: 4, name: 'Opinion Poll',             status: 'Active',    start: '2026-07-01', end: '2026-07-20', totalBooths: 412, color: '#8B5CF6' },
-  { id: 5, name: 'Candidate Feedback',       status: 'Active',    start: '2026-08-01', end: '2026-08-15', totalBooths: 350, color: '#EC4899' },
-  { id: 6, name: 'Exit Poll',                status: 'Upcoming',  start: '2026-09-01', end: '2026-09-05', totalBooths: 412, color: '#06B6D4' },
-]
-
-const SURVEY_FORMS = [
-  { id: 1, name: 'Door-to-Door Survey',    questions: 6, category: 'Outreach' },
-  { id: 2, name: 'Beneficiary Verification', questions: 5, category: 'Verification' },
-  { id: 3, name: 'Issue Collection Form',  questions: 3, category: 'Issue Collection' },
-  { id: 4, name: 'Urban Outreach Survey',  questions: 8, category: 'Outreach' },
-  { id: 5, name: 'Rural Outreach Survey',  questions: 7, category: 'Outreach' },
-  { id: 6, name: 'Business & Trader Poll', questions: 6, category: 'Feedback' },
-  { id: 7, name: 'Opinion Poll',           questions: 4, category: 'Feedback' },
-]
+// ─── Static booth selection data (populated from voters upload) ───────────────
 
 const POLLING_STATIONS = [
   { id: 'PS1', name: 'Rishikesh',      boothCount: 18 },
@@ -44,17 +29,6 @@ const MOCK_BOOTHS = [
   ...Array.from({ length: 5 }, (_, i) => ({ id: i+26, no: String(i+26).padStart(3,'0'), name: `Booth ${String(i+26).padStart(3,'0')}`, station: 'Roorkee',        stationId: 'PS5', agent: `Agent ${String(i+26).padStart(2,'0')}` })),
 ]
 
-// ─── Mock Assignments ─────────────────────────────────────────────────────────
-
-const MOCK_ASSIGNMENTS = [
-  { id: 1, name: 'Urban Booths',           phaseId: 1, formId: 4, boothRange: '001–120', boothCount: 120, agentCount: 118, status: 'Active',    createdAt: '2026-04-28', createdBy: 'Admin', notes: '' },
-  { id: 2, name: 'Rural Booths',           phaseId: 1, formId: 5, boothRange: '121–250', boothCount: 130, agentCount: 130, status: 'Active',    createdAt: '2026-04-28', createdBy: 'Admin', notes: '' },
-  { id: 3, name: 'Beneficiary Households', phaseId: 1, formId: 2, boothRange: '251–320', boothCount: 70,  agentCount: 68,  status: 'Active',    createdAt: '2026-04-29', createdBy: 'Admin', notes: 'Focus on scheme beneficiaries.' },
-  { id: 4, name: 'Business & Traders',     phaseId: 1, formId: 6, boothRange: '321–412', boothCount: 92,  agentCount: 92,  status: 'Active',    createdAt: '2026-04-29', createdBy: 'Admin', notes: '' },
-  { id: 5, name: 'Urban Issues',           phaseId: 2, formId: 3, boothRange: '001–180', boothCount: 180, agentCount: 175, status: 'Completed', createdAt: '2026-05-12', createdBy: 'Admin', notes: '' },
-  { id: 6, name: 'Rural Issues',           phaseId: 2, formId: 3, boothRange: '181–380', boothCount: 200, agentCount: 200, status: 'Completed', createdAt: '2026-05-12', createdBy: 'Admin', notes: '' },
-  { id: 7, name: 'Opinion Poll Phase 4',   phaseId: 4, formId: 7, boothRange: '001–412', boothCount: 412, agentCount: 412, status: 'Active',    createdAt: '2026-06-25', createdBy: 'Admin', notes: '' },
-]
 
 const STATUS_CFG = {
   Active:    { color: '#10B981', bg: '#ECFDF5' },
@@ -101,7 +75,7 @@ function StepBar({ step }) {
 
 // ─── Create Assignment Wizard ─────────────────────────────────────────────────
 
-function CreateWizard({ onClose, onSave, defaultPhaseId }) {
+function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms }) {
   const [step, setStep]   = useState(1)
   const [phaseId, setPId] = useState(defaultPhaseId || '')
   const [formId, setFId]  = useState('')
@@ -113,8 +87,8 @@ function CreateWizard({ onClose, onSave, defaultPhaseId }) {
   const [rangeTo, setRT]    = useState('')
   const [errors, setErrors] = useState({})
 
-  const selectedPhase = PHASES.find(p => p.id === Number(phaseId))
-  const selectedForm  = SURVEY_FORMS.find(f => f.id === Number(formId))
+  const selectedPhase = phases.find(p => p.id === phaseId)
+  const selectedForm  = surveyForms.find(f => f.id === formId)
 
   const filteredBooths = useMemo(() => {
     let b = MOCK_BOOTHS
@@ -159,9 +133,9 @@ function CreateWizard({ onClose, onSave, defaultPhaseId }) {
     if (step === 2 && !validateStep2()) return
     setStep(s => s + 1)
   }
-  function save() {
+  async function save() {
     if (!validateStep3()) return
-    onSave({ id: uid(), name, phaseId: Number(phaseId), formId: Number(formId), boothRange: 'Custom', boothCount: selBooths.size, agentCount: selBooths.size, status: 'Active', createdAt: new Date().toISOString().slice(0,10), createdBy: 'Admin', notes: '' })
+    await onSave({ name, phaseId, formId, boothRange: 'Custom', boothCount: selBooths.size, agentCount: selBooths.size, status: 'Active', notes: '' })
     onClose()
   }
 
@@ -189,7 +163,7 @@ function CreateWizard({ onClose, onSave, defaultPhaseId }) {
                 <div className="relative">
                   <select value={phaseId} onChange={e => setPId(e.target.value)} className={`appearance-none w-full px-3.5 py-2.5 pr-9 rounded-xl border text-[13px] text-slate-700 outline-none cursor-pointer bg-white ${errors.phaseId ? 'border-red-300 bg-red-50' : 'border-[#E8ECF4]'}`}>
                     <option value="">Select campaign phase…</option>
-                    {PHASES.map(p => <option key={p.id} value={p.id}>{p.name} — {p.status}</option>)}
+                    {phases.map(p => <option key={p.id} value={p.id}>{p.name} — {p.status}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
@@ -199,7 +173,7 @@ function CreateWizard({ onClose, onSave, defaultPhaseId }) {
                     <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: selectedPhase.color }} />
                     <div className="flex-1 min-w-0">
                       <p className="text-slate-700 text-[12px] font-semibold">{selectedPhase.name}</p>
-                      <p className="text-slate-400 text-[11px]">{fmtShort(selectedPhase.start)} → {fmtShort(selectedPhase.end)} · {selectedPhase.totalBooths} booths</p>
+                      <p className="text-slate-400 text-[11px]">{fmtShort(selectedPhase.startDate)} → {fmtShort(selectedPhase.endDate)} · {selectedPhase.booths} booths</p>
                     </div>
                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ color: PHASE_STATUS_CFG[selectedPhase.status]?.color, background: PHASE_STATUS_CFG[selectedPhase.status]?.bg }}>{selectedPhase.status}</span>
                   </div>
@@ -209,10 +183,10 @@ function CreateWizard({ onClose, onSave, defaultPhaseId }) {
               <div>
                 <label className="block text-slate-600 text-[12px] font-semibold mb-2">Survey Form <span className="text-red-400">*</span></label>
                 <div className="space-y-2">
-                  {SURVEY_FORMS.map(f => (
-                    <label key={f.id} onClick={() => setFId(String(f.id))} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${Number(formId) === f.id ? 'border-[#5B5CEB] bg-[#EEF2FF]' : 'border-[#E8ECF4] hover:border-slate-300 bg-white'}`}>
-                      <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${Number(formId) === f.id ? 'border-[#5B5CEB]' : 'border-slate-300'}`}>
-                        {Number(formId) === f.id && <div className="w-2 h-2 rounded-full" style={{ background: '#5B5CEB' }} />}
+                  {surveyForms.map(f => (
+                    <label key={f.id} onClick={() => setFId(f.id)} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${formId === f.id ? 'border-[#5B5CEB] bg-[#EEF2FF]' : 'border-[#E8ECF4] hover:border-slate-300 bg-white'}`}>
+                      <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${formId === f.id ? 'border-[#5B5CEB]' : 'border-slate-300'}`}>
+                        {formId === f.id && <div className="w-2 h-2 rounded-full" style={{ background: '#5B5CEB' }} />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-slate-700 text-[13px] font-medium">{f.name}</p>
@@ -349,15 +323,27 @@ function CreateWizard({ onClose, onSave, defaultPhaseId }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AssignSurveys() {
-  const [assignments, setAssignments]   = useState(MOCK_ASSIGNMENTS)
-  const [selectedPhaseId, setPhaseId]   = useState(1)
+  const [phases, setPhases]             = useState([])
+  const [surveyForms, setSurveyForms]   = useState([])
+  const [assignments, setAssignments]   = useState([])
+  const [selectedPhaseId, setPhaseId]   = useState('')
   const [search, setSearch]             = useState('')
   const [filterForm, setFilterForm]     = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [drawer, setDrawer]             = useState(null)
   const [showCreate, setShowCreate]     = useState(false)
 
-  const selectedPhase = PHASES.find(p => p.id === selectedPhaseId)
+  useEffect(() => subscribePhases(data => {
+    setPhases(data)
+    setPhaseId(prev => prev || data[0]?.id || '')
+  }), [])
+  useEffect(() => subscribeSurveyForms(data => setSurveyForms(data)), [])
+  useEffect(() => subscribeAssignments(data => {
+    setAssignments(data)
+    if (drawer) setDrawer(data.find(a => a.id === drawer.id) || null)
+  }), [])
+
+  const selectedPhase = phases.find(p => p.id === selectedPhaseId)
   const phaseStatusCfg = PHASE_STATUS_CFG[selectedPhase?.status] || PHASE_STATUS_CFG.Upcoming
 
   // Assignments for selected phase
@@ -367,18 +353,18 @@ export default function AssignSurveys() {
   const filtered = useMemo(() => {
     let d = phaseAssignments
     if (search) { const q = search.toLowerCase(); d = d.filter(a => a.name.toLowerCase().includes(q)) }
-    if (filterForm)   d = d.filter(a => a.formId === Number(filterForm))
+    if (filterForm)   d = d.filter(a => a.formId === filterForm)
     if (filterStatus) d = d.filter(a => a.status === filterStatus)
     return d
   }, [phaseAssignments, search, filterForm, filterStatus])
 
   // Summary metrics for selected phase
-  const totalBooths     = phaseAssignments.reduce((s, a) => s + a.boothCount, 0)
-  const uniqueForms     = [...new Set(phaseAssignments.map(a => a.formId))].length
-  const coveragePct     = selectedPhase ? Math.min(100, Math.round(totalBooths / selectedPhase.totalBooths * 100)) : 0
+  const totalBooths = phaseAssignments.reduce((s, a) => s + (a.boothCount || 0), 0)
+  const uniqueForms = [...new Set(phaseAssignments.map(a => a.formId))].length
+  const coveragePct = selectedPhase?.booths > 0 ? Math.min(100, Math.round(totalBooths / selectedPhase.booths * 100)) : 0
 
-  function saveAssignment(a) { setAssignments(prev => [a, ...prev]) }
-  function deleteAssignment(id) { setAssignments(prev => prev.filter(a => a.id !== id)); if (drawer?.id === id) setDrawer(null) }
+  async function saveAssignment(a) { await createAssignment(a) }
+  async function handleDelete(id) { await deleteAssignmentSvc(id); if (drawer?.id === id) setDrawer(null) }
 
   return (
     <div className="-m-6 flex flex-col bg-[#F5F7FB]" style={{ minHeight: 'calc(100vh - 64px)' }}>
@@ -409,7 +395,7 @@ export default function AssignSurveys() {
               <div className="flex-1 min-w-0">
                 <p className="text-slate-800 font-bold text-[15px]">{selectedPhase?.name}</p>
                 <p className="text-slate-400 text-[12px] mt-0.5">
-                  {fmtShort(selectedPhase?.start)} → {fmtShort(selectedPhase?.end)} &nbsp;·&nbsp; {selectedPhase?.totalBooths} total booths
+                  {fmtShort(selectedPhase?.startDate)} → {fmtShort(selectedPhase?.endDate)} &nbsp;·&nbsp; {selectedPhase?.booths} total booths
                 </p>
               </div>
               <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ color: phaseStatusCfg.color, background: phaseStatusCfg.bg }}>{selectedPhase?.status}</span>
@@ -417,8 +403,8 @@ export default function AssignSurveys() {
 
             {/* Phase picker */}
             <div className="relative flex-shrink-0">
-              <select value={selectedPhaseId} onChange={e => { setPhaseId(Number(e.target.value)); setSearch(''); setFilterForm(''); setFilterStatus('') }} className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#E8ECF4] text-[13px] text-slate-600 outline-none cursor-pointer bg-white" style={{ minWidth: 200 }}>
-                {PHASES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              <select value={selectedPhaseId} onChange={e => { setPhaseId(e.target.value); setSearch(''); setFilterForm(''); setFilterStatus('') }} className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#E8ECF4] text-[13px] text-slate-600 outline-none cursor-pointer bg-white" style={{ minWidth: 200 }}>
+                {phases.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
               <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
@@ -448,13 +434,13 @@ export default function AssignSurveys() {
           <div className="bg-white rounded-2xl border border-[#E8ECF4] px-5 py-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-600 text-[13px] font-semibold">Booth Coverage in This Phase</span>
-              <span className="font-bold text-[14px]" style={{ color: selectedPhase.color }}>{coveragePct}% ({totalBooths.toLocaleString()} / {selectedPhase.totalBooths} booths)</span>
+              <span className="font-bold text-[14px]" style={{ color: selectedPhase.color }}>{coveragePct}% ({totalBooths.toLocaleString()} / {selectedPhase.booths || 0} booths)</span>
             </div>
             <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
               <div className="h-full rounded-full transition-all" style={{ width: `${coveragePct}%`, background: `linear-gradient(90deg, ${selectedPhase.color}, ${selectedPhase.color}99)` }} />
             </div>
             {coveragePct < 100 && (
-              <p className="text-slate-400 text-[11px] mt-1.5">{(selectedPhase.totalBooths - totalBooths).toLocaleString()} booths not yet assigned in this phase.</p>
+              <p className="text-slate-400 text-[11px] mt-1.5">{((selectedPhase.booths || 0) - totalBooths).toLocaleString()} booths not yet assigned in this phase.</p>
             )}
           </div>
         )}
@@ -469,7 +455,7 @@ export default function AssignSurveys() {
           <div className="relative">
             <select value={filterForm} onChange={e => setFilterForm(e.target.value)} className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-600 outline-none cursor-pointer" style={{ minWidth: 160 }}>
               <option value="">All Survey Forms</option>
-              {SURVEY_FORMS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              {surveyForms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
             <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
@@ -507,7 +493,7 @@ export default function AssignSurveys() {
                   </td></tr>
                 )
                 : filtered.map(a => {
-                  const sf = SURVEY_FORMS.find(f => f.id === a.formId)
+                  const sf = surveyForms.find(f => f.id === a.formId)
                   const sc = STATUS_CFG[a.status] || STATUS_CFG.Draft
                   return (
                     <tr key={a.id} onClick={() => setDrawer(a)} className="border-b border-slate-50 hover:bg-slate-50/60 cursor-pointer transition-colors group">
@@ -553,8 +539,8 @@ export default function AssignSurveys() {
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => setDrawer(a)} title="View"   className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors"><Eye size={14} /></button>
                           <button onClick={() => setDrawer(a)} title="Edit"   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><Edit2 size={14} /></button>
-                          <button onClick={() => { const d = { ...a, id: uid(), name: a.name + ' (Copy)', createdAt: new Date().toISOString().slice(0,10) }; setAssignments(prev => [d, ...prev]) }} title="Duplicate" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><Copy size={14} /></button>
-                          <button onClick={() => deleteAssignment(a.id)} title="Delete" className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
+                          <button onClick={() => { const { id, _createdAt, ...rest } = a; createAssignment({ ...rest, name: a.name + ' (Copy)' }) }} title="Duplicate" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><Copy size={14} /></button>
+                          <button onClick={() => handleDelete(a.id)} title="Delete" className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
@@ -568,8 +554,8 @@ export default function AssignSurveys() {
 
       {/* ─── Assignment Drawer ─── */}
       {drawer && (() => {
-        const sf  = SURVEY_FORMS.find(f => f.id === drawer.formId)
-        const ph  = PHASES.find(p => p.id === drawer.phaseId)
+        const sf  = surveyForms.find(f => f.id === drawer.formId)
+        const ph  = phases.find(p => p.id === drawer.phaseId)
         const sc  = STATUS_CFG[drawer.status] || STATUS_CFG.Draft
         return (
           <>
@@ -668,7 +654,7 @@ export default function AssignSurveys() {
               <div className="px-5 py-4 border-t border-[#E8ECF4] flex-shrink-0 flex gap-2">
                 <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors"><Edit2 size={14} /> Edit</button>
                 <button className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors"><MapPin size={14} /> View Booths</button>
-                <button onClick={() => deleteAssignment(drawer.id)} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-100 text-red-400 text-[13px] font-medium hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
+                <button onClick={() => handleDelete(drawer.id)} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-100 text-red-400 text-[13px] font-medium hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
               </div>
             </div>
           </>
@@ -676,7 +662,7 @@ export default function AssignSurveys() {
       })()}
 
       {/* ─── Create Wizard ─── */}
-      {showCreate && <CreateWizard defaultPhaseId={selectedPhaseId} onClose={() => setShowCreate(false)} onSave={saveAssignment} />}
+      {showCreate && <CreateWizard defaultPhaseId={selectedPhaseId} onClose={() => setShowCreate(false)} onSave={saveAssignment} phases={phases} surveyForms={surveyForms} />}
     </div>
   )
 }

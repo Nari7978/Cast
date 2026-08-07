@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Search, Plus, Upload, Download, X, Eye, Edit2, Trash2,
   Phone, Mail, ChevronDown, ChevronLeft, ChevronRight,
@@ -55,33 +55,7 @@ const BOOTHS_LIST = [
   { id: 34, no: 34, name: 'City Centre Part-3',    stationId: 8 },
 ]
 
-const INIT_AGENTS = [
-  { id: 1,  name: 'Ramesh Kumar',    mobile: '9876543210', email: 'ramesh.kumar@gmail.com',    gender: 'Male',   boothId: 1,  boothNo: 1,  boothName: 'Chidderwala Part-1',    stationId: 1, station: 'Atal Utkrisht Rajkiya Inter College', phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 2,  name: 'Mohan Verma',     mobile: '9876543211', email: 'mohan.v@gmail.com',         gender: 'Male',   boothId: 2,  boothNo: 2,  boothName: 'Chidderwala Part-2',    stationId: 1, station: 'Atal Utkrisht Rajkiya Inter College', phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 3,  name: 'Sita Devi',       mobile: '9876543212', email: '',                          gender: 'Female', boothId: 3,  boothNo: 3,  boothName: 'Chidderwala Part-3',    stationId: 1, station: 'Atal Utkrisht Rajkiya Inter College', phase: 'Phase 2', status: 'Inactive', created: '01 Jan 2024', updated: '15 May 2024', notes: '' },
-  { id: 4,  name: 'Vikram Singh',    mobile: '9876543213', email: 'vikram.s@gmail.com',        gender: 'Male',   boothId: 4,  boothNo: 4,  boothName: 'Chidderwala Part-4',    stationId: 1, station: 'Atal Utkrisht Rajkiya Inter College', phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 5,  name: 'Priya Sharma',    mobile: '9876543214', email: 'priya.sharma@gmail.com',    gender: 'Female', boothId: 5,  boothNo: 5,  boothName: 'Muni Ki Reti Part-1',   stationId: 2, station: 'Govt. Primary School Muni Ki Reti',   phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 6,  name: 'Anjali Singh',    mobile: '9876543215', email: 'anjali.s@gmail.com',        gender: 'Female', boothId: 6,  boothNo: 6,  boothName: 'Muni Ki Reti Part-2',   stationId: 2, station: 'Govt. Primary School Muni Ki Reti',   phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '15 May 2024', notes: '' },
-  { id: 7,  name: 'Deepak Negi',     mobile: '9876543216', email: 'deepak.n@gmail.com',        gender: 'Male',   boothId: 7,  boothNo: 7,  boothName: 'Muni Ki Reti Part-3',   stationId: 2, station: 'Govt. Primary School Muni Ki Reti',   phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '14 May 2024', notes: '' },
-  { id: 8,  name: 'Suresh Rawat',    mobile: '9876543217', email: 'suresh.r@gmail.com',        gender: 'Male',   boothId: 9,  boothNo: 9,  boothName: 'Muni Ki Reti Part-5',   stationId: 2, station: 'Govt. Primary School Muni Ki Reti',   phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 9,  name: 'Kavita Bhatt',    mobile: '9876543218', email: 'kavita.b@gmail.com',        gender: 'Female', boothId: 10, boothNo: 10, boothName: 'Tapovan Area Part-1',   stationId: 3, station: 'Saraswati Vidya Mandir',              phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 10, name: 'Mahesh Joshi',    mobile: '9876543219', email: 'mahesh.j@gmail.com',        gender: 'Male',   boothId: 12, boothNo: 12, boothName: 'Tapovan Area Part-3',   stationId: 3, station: 'Saraswati Vidya Mandir',              phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '13 May 2024', notes: '' },
-  { id: 11, name: 'Geeta Rawat',     mobile: '9876543220', email: '',                          gender: 'Female', boothId: 13, boothNo: 13, boothName: 'Tapovan Area Part-4',   stationId: 3, station: 'Saraswati Vidya Mandir',              phase: 'Phase 2', status: 'Inactive', created: '01 Jan 2024', updated: '10 May 2024', notes: '' },
-  { id: 12, name: 'Arun Sharma',     mobile: '9876543221', email: 'arun.sharma@gmail.com',     gender: 'Male',   boothId: 14, boothNo: 14, boothName: 'Rishikesh Main Part-1', stationId: 4, station: 'Rajkiya Inter College Rishikesh',      phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 13, name: 'Pooja Negi',      mobile: '9876543222', email: 'pooja.n@gmail.com',         gender: 'Female', boothId: 15, boothNo: 15, boothName: 'Rishikesh Main Part-2', stationId: 4, station: 'Rajkiya Inter College Rishikesh',      phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 14, name: 'Dinesh Kumar',    mobile: '9876543223', email: 'dinesh.k@gmail.com',        gender: 'Male',   boothId: 16, boothNo: 16, boothName: 'Rishikesh Main Part-3', stationId: 4, station: 'Rajkiya Inter College Rishikesh',      phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '15 May 2024', notes: '' },
-  { id: 15, name: 'Neha Bisht',      mobile: '9876543224', email: 'neha.b@gmail.com',          gender: 'Female', boothId: 18, boothNo: 18, boothName: 'Rishikesh Main Part-5', stationId: 4, station: 'Rajkiya Inter College Rishikesh',      phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 16, name: 'Rahul Dobhal',    mobile: '9876543225', email: 'rahul.d@gmail.com',         gender: 'Male',   boothId: 19, boothNo: 19, boothName: 'Rishikesh Main Part-6', stationId: 4, station: 'Rajkiya Inter College Rishikesh',      phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '14 May 2024', notes: '' },
-  { id: 17, name: 'Meena Devi',      mobile: '9876543226', email: '',                          gender: 'Female', boothId: 20, boothNo: 20, boothName: 'Haridwar Road Part-1',  stationId: 5, station: 'Government Girls Inter College',        phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 18, name: 'Rajiv Gupta',     mobile: '9876543227', email: 'rajiv.g@gmail.com',         gender: 'Male',   boothId: 21, boothNo: 21, boothName: 'Haridwar Road Part-2',  stationId: 5, station: 'Government Girls Inter College',        phase: 'Phase 2', status: 'Inactive', created: '01 Jan 2024', updated: '11 May 2024', notes: '' },
-  { id: 19, name: 'Uma Shankar',     mobile: '9876543229', email: 'uma.s@gmail.com',           gender: 'Male',   boothId: 23, boothNo: 23, boothName: 'Lakshman Jhula Part-1', stationId: 6, station: 'Primary School Lakshman Jhula',        phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 20, name: 'Ravi Thapa',      mobile: '9876543230', email: 'ravi.t@gmail.com',          gender: 'Male',   boothId: 24, boothNo: 24, boothName: 'Lakshman Jhula Part-2', stationId: 6, station: 'Primary School Lakshman Jhula',        phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '15 May 2024', notes: '' },
-  { id: 21, name: 'Anita Rawat',     mobile: '9876543231', email: 'anita.r@gmail.com',         gender: 'Female', boothId: 26, boothNo: 26, boothName: 'Lakshman Jhula Part-4', stationId: 6, station: 'Primary School Lakshman Jhula',        phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 22, name: 'Sunita Rana',     mobile: '9876543232', email: 'sunita.r@gmail.com',        gender: 'Female', boothId: 27, boothNo: 27, boothName: 'Dehradun Road Part-1',  stationId: 7, station: 'Nehru Smarak Vidyalaya',              phase: 'Phase 2', status: 'Inactive', created: '01 Jan 2024', updated: '09 May 2024', notes: '' },
-  { id: 23, name: 'Bharat Singh',    mobile: '9876543233', email: 'bharat.s@gmail.com',        gender: 'Male',   boothId: 29, boothNo: 29, boothName: 'Dehradun Road Part-3',  stationId: 7, station: 'Nehru Smarak Vidyalaya',              phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-  { id: 24, name: 'Kamla Devi',      mobile: '9876543234', email: '',                          gender: 'Female', boothId: 30, boothNo: 30, boothName: 'Dehradun Road Part-4',  stationId: 7, station: 'Nehru Smarak Vidyalaya',              phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '15 May 2024', notes: '' },
-  { id: 25, name: 'Harish Bahuguna', mobile: '9876543236', email: 'harish.b@gmail.com',        gender: 'Male',   boothId: 32, boothNo: 32, boothName: 'City Centre Part-1',    stationId: 8, station: 'Municipal Corporation School',         phase: 'Phase 2', status: 'Active',   created: '01 Jan 2024', updated: '16 May 2024', notes: '' },
-]
+import { subscribeAgents, createAgent, updateAgent, deleteAgent as deleteAgentSvc } from '../firebase/agentService'
 
 const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', phase: 'Phase 2', stationId: '', boothId: '', status: 'Active', notes: '' }
 
@@ -232,16 +206,15 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
     if (!validate()) return
     const booth = BOOTHS_LIST.find(b => b.id === Number(form.boothId))
     const station = STATIONS.find(s => s.id === Number(form.stationId))
-    onSave({
-      ...(editingAgent ?? { id: Date.now(), created: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }),
+    const data = {
       ...form,
       stationId: Number(form.stationId),
       boothId:   Number(form.boothId),
       boothNo:   booth?.no,
       boothName: booth?.name,
       station:   station?.name,
-      updated:   'Just now',
-    })
+    }
+    onSave(editingAgent ? { id: editingAgent.id, ...data } : data)
   }
 
   const inputCls = (err) =>
@@ -367,7 +340,7 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
 const PAGE_SIZE = 10
 
 export default function BoothAgents() {
-  const [agents,        setAgents]        = useState(INIT_AGENTS)
+  const [agents,        setAgents]        = useState([])
   const [search,        setSearch]        = useState('')
   const [stationFilter, setStationFilter] = useState('All')
   const [statusFilter,  setStatusFilter]  = useState('All')
@@ -375,6 +348,11 @@ export default function BoothAgents() {
   const [drawerAgent,   setDrawerAgent]   = useState(null)
   const [showForm,      setShowForm]      = useState(false)
   const [editingAgent,  setEditingAgent]  = useState(null)
+
+  useEffect(() => subscribeAgents(data => {
+    setAgents(data)
+    setDrawerAgent(prev => prev ? data.find(a => a.id === prev.id) || null : null)
+  }), [])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -395,14 +373,20 @@ export default function BoothAgents() {
   const openAdd  = () => { setEditingAgent(null);    setShowForm(true) }
   const openEdit = (a) => { setEditingAgent(a);      setShowForm(true) }
 
-  const handleSave = (data) => {
-    setAgents(prev => editingAgent
-      ? prev.map(a => a.id === data.id ? data : a)
-      : [...prev, data])
+  const handleSave = async (data) => {
+    if (data.id) {
+      const { id, ...rest } = data
+      await updateAgent(id, rest)
+    } else {
+      await createAgent(data)
+    }
     setShowForm(false)
   }
 
-  const handleDelete = (id) => setAgents(prev => prev.filter(a => a.id !== id))
+  const handleDelete = async (id) => {
+    await deleteAgentSvc(id)
+    setDrawerAgent(null)
+  }
 
   const cards = [
     { label: 'Total Booth Agents', value: agents.length,  icon: Users,      color: '#5B5CEB', bg: '#EEF2FF' },

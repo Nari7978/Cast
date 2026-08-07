@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Plus, Search, X, Edit2, Archive, Eye, Copy, Download,
   ChevronDown, ArrowLeft, Type, AlignLeft, Hash, Phone,
@@ -35,85 +35,9 @@ const STATUS_CFG = {
 
 const CATEGORIES = ['Outreach', 'Issue Collection', 'Verification', 'Feedback', 'Exit Poll', 'Other']
 
-const LINKED_PHASES = [
-  { id: 1, name: 'Door-to-Door Campaign',    color: '#5B5CEB' },
-  { id: 2, name: 'Issue Collection',          color: '#10B981' },
-  { id: 3, name: 'Beneficiary Verification',  color: '#F59E0B' },
-  { id: 4, name: 'Opinion Poll',              color: '#8B5CF6' },
-  { id: 5, name: 'Candidate Feedback',        color: '#EC4899' },
-  { id: 6, name: 'Exit Poll',                 color: '#06B6D4' },
-]
+import { subscribeSurveyForms, createSurveyForm, updateSurveyForm } from '../firebase/surveyService'
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const MOCK_FORMS = [
-  {
-    id: 1, name: 'Door-to-Door Survey', description: 'Household voter outreach and sentiment analysis.',
-    category: 'Outreach', status: 'Active', linkedPhases: [1],
-    createdBy: 'Admin', createdAt: '2026-04-20', updatedAt: '2026-05-16',
-    questions: [
-      { id: 'q1', type: 'short_text',    question: "Voter's full name",                  required: true,  helpText: '',              placeholder: 'Enter name',      options: [],                                                          order: 1 },
-      { id: 'q2', type: 'yes_no',        question: 'Are you a registered voter?',         required: true,  helpText: '',              placeholder: '',                options: [],                                                          order: 2 },
-      { id: 'q3', type: 'single_choice', question: 'Do you support our candidate?',       required: true,  helpText: '',              placeholder: '',                options: ['Yes', 'No', 'Undecided'],                                  order: 3 },
-      { id: 'q4', type: 'dropdown',      question: 'Biggest issue in your area?',         required: false, helpText: 'Select one',    placeholder: '',                options: ['Roads', 'Water Supply', 'Employment', 'Electricity', 'Others'], order: 4 },
-      { id: 'q5', type: 'rating',        question: "Rate our party's performance (1–5)",  required: false, helpText: '1=Poor 5=Best', placeholder: '',                options: [],                                                          order: 5 },
-      { id: 'q6', type: 'long_text',     question: 'Additional feedback or comments?',    required: false, helpText: '',              placeholder: 'Share thoughts…', options: [],                                                          order: 6 },
-    ],
-  },
-  {
-    id: 2, name: 'Beneficiary Verification', description: 'Verify government scheme beneficiaries.',
-    category: 'Verification', status: 'Active', linkedPhases: [3],
-    createdBy: 'Admin', createdAt: '2026-05-01', updatedAt: '2026-06-02',
-    questions: [
-      { id: 'q1', type: 'short_text',      question: 'Beneficiary Name',                           required: true,  helpText: '',  placeholder: '',            options: [],                                                                    order: 1 },
-      { id: 'q2', type: 'mobile',          question: 'Mobile Number',                              required: true,  helpText: '',  placeholder: '10-digit',    options: [],                                                                    order: 2 },
-      { id: 'q3', type: 'multiple_choice', question: 'Which schemes are you enrolled in?',          required: true,  helpText: '',  placeholder: '',            options: ['PM Awas Yojana', 'Ujjwala Yojana', 'Jan Dhan', 'MGNREGA', 'Kisan Samman Nidhi'], order: 3 },
-      { id: 'q4', type: 'yes_no',          question: 'Are you receiving scheme benefits regularly?', required: true,  helpText: '',  placeholder: '',            options: [],                                                                    order: 4 },
-      { id: 'q5', type: 'long_text',       question: 'Issues with scheme delivery?',                required: false, helpText: '',  placeholder: '',            options: [],                                                                    order: 5 },
-    ],
-  },
-  {
-    id: 3, name: 'Issue Collection Form', description: 'Primary voter concerns and local issues.',
-    category: 'Issue Collection', status: 'Active', linkedPhases: [2],
-    createdBy: 'Admin', createdAt: '2026-05-10', updatedAt: '2026-05-28',
-    questions: [
-      { id: 'q1', type: 'multiple_choice', question: 'Select your top 3 issues',          required: true,  helpText: '', placeholder: '', options: ['Roads', 'Water', 'Electricity', 'Employment', 'Education', 'Healthcare', 'Sanitation', 'Others'], order: 1 },
-      { id: 'q2', type: 'rating',          question: 'Rate local infrastructure (1–5)',    required: true,  helpText: '', placeholder: '', options: [], order: 2 },
-      { id: 'q3', type: 'long_text',       question: 'Describe the most urgent problem',  required: false, helpText: '', placeholder: '', options: [], order: 3 },
-    ],
-  },
-  {
-    id: 4, name: 'Opinion Poll', description: 'Voter sentiment and candidate preference survey.',
-    category: 'Feedback', status: 'Active', linkedPhases: [4],
-    createdBy: 'Admin', createdAt: '2026-06-15', updatedAt: '2026-06-28',
-    questions: [
-      { id: 'q1', type: 'single_choice', question: 'Who will you vote for?',             required: true,  helpText: '', placeholder: '', options: ['Candidate A', 'Candidate B', 'Candidate C', 'Not Decided'], order: 1 },
-      { id: 'q2', type: 'rating',        question: 'Rate current MLA performance',        required: true,  helpText: '', placeholder: '', options: [], order: 2 },
-      { id: 'q3', type: 'yes_no',        question: 'Satisfied with party work?',          required: false, helpText: '', placeholder: '', options: [], order: 3 },
-      { id: 'q4', type: 'short_text',    question: 'What would make you vote for us?',    required: false, helpText: '', placeholder: '', options: [], order: 4 },
-    ],
-  },
-  {
-    id: 5, name: 'Candidate Feedback', description: 'Voter feedback on candidate performance.',
-    category: 'Feedback', status: 'Draft', linkedPhases: [5],
-    createdBy: 'Admin', createdAt: '2026-07-01', updatedAt: '2026-07-10',
-    questions: [
-      { id: 'q1', type: 'rating',          question: 'Rate candidate visibility in your area',  required: true,  helpText: '', placeholder: '', options: [], order: 1 },
-      { id: 'q2', type: 'single_choice',   question: 'Have you met the candidate personally?',  required: true,  helpText: '', placeholder: '', options: ['Yes', 'No', 'At events only'], order: 2 },
-      { id: 'q3', type: 'multiple_choice', question: 'What do you expect from the candidate?',  required: false, helpText: '', placeholder: '', options: ['Better roads', 'Employment', 'Cleanliness', 'Water supply', 'Schools', 'Hospitals'], order: 3 },
-    ],
-  },
-  {
-    id: 6, name: 'Exit Poll Survey', description: 'Post-voting sentiment collection.',
-    category: 'Exit Poll', status: 'Draft', linkedPhases: [6],
-    createdBy: 'Admin', createdAt: '2026-07-15', updatedAt: '2026-07-15',
-    questions: [
-      { id: 'q1', type: 'yes_no',        question: 'Did you vote today?',              required: true,  helpText: '',                           placeholder: '', options: [], order: 1 },
-      { id: 'q2', type: 'single_choice', question: 'Which party did you vote for?',    required: false, helpText: 'Optional — choice is private', placeholder: '', options: ['Party A', 'Party B', 'Party C', 'Independent', 'Prefer not to say'], order: 2 },
-      { id: 'q3', type: 'rating',        question: 'Rate your voting experience',       required: false, helpText: '',                           placeholder: '', options: [], order: 3 },
-    ],
-  },
-]
+const LINKED_PHASES = []
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -486,12 +410,18 @@ function SurveyBuilder({ initForm, onBack, onSave }) {
 // ─── Main List View ───────────────────────────────────────────────────────────
 
 export default function SurveyForms() {
-  const [forms, setForms]       = useState(MOCK_FORMS)
+  const [forms, setForms]       = useState([])
   const [view, setView]         = useState('list')   // 'list' | 'builder'
   const [builderForm, setBForm] = useState(null)
   const [search, setSearch]     = useState('')
   const [filterStatus, setFSt]  = useState('')
   const [drawerForm, setDrawer] = useState(null)
+
+  useEffect(() => subscribeSurveyForms(data => setForms(data)), [])
+
+  useEffect(() => {
+    if (drawerForm) setDrawer(forms.find(f => f.id === drawerForm.id) || null)
+  }, [forms])
 
   const counts = useMemo(() => ({
     total:    forms.length,
@@ -509,21 +439,23 @@ export default function SurveyForms() {
 
   function openBuilder(form = null) { setBForm(form); setView('builder'); setDrawer(null) }
 
-  function saveForm(saved) {
+  async function saveForm(saved) {
     if (saved.id) {
-      setForms(prev => prev.map(f => f.id === saved.id ? { ...f, ...saved, updatedAt: new Date().toISOString().slice(0,10) } : f))
+      await updateSurveyForm(saved.id, saved)
     } else {
-      setForms(prev => [{ ...saved, id: Date.now(), createdAt: new Date().toISOString().slice(0,10), updatedAt: new Date().toISOString().slice(0,10), linkedPhases: [], createdBy: 'Admin' }, ...prev])
+      await createSurveyForm(saved)
     }
     setView('list')
   }
 
-  function dupForm(f) {
-    const d = { ...f, id: Date.now(), name: f.name + ' (Copy)', status: 'Draft', linkedPhases: [], createdAt: new Date().toISOString().slice(0,10), updatedAt: new Date().toISOString().slice(0,10) }
-    setForms(prev => [d, ...prev])
+  async function dupForm(f) {
+    const { id, _createdAt, ...rest } = f
+    await createSurveyForm({ ...rest, name: f.name + ' (Copy)', status: 'Draft', linkedPhases: [] })
   }
 
-  function archiveForm(id) { setForms(prev => prev.map(f => f.id === id ? { ...f, status: 'Archived' } : f)); if (drawerForm?.id === id) setDrawer(prev => ({ ...prev, status: 'Archived' })) }
+  async function archiveForm(id) {
+    await updateSurveyForm(id, { status: 'Archived' })
+  }
 
   // ── Builder view ──
   if (view === 'builder') {
