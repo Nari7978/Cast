@@ -5,7 +5,10 @@ import {
   Eye, EyeOff, ArrowUp, ArrowDown, ArrowUpDown, Users, Cloud, Loader2,
   AlertCircle, RefreshCw,
 } from 'lucide-react'
-import { uploadVoters, uploadBooths, saveImportMeta, getImportMeta } from '../firebase/voterService'
+import {
+  uploadVoters, uploadBooths, saveImportMeta, getImportMeta,
+  fetchVotersPage, fetchAllBooths,
+} from '../firebase/voterService'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -24,6 +27,7 @@ const HEADER_LABEL = {
 const hl = k => HEADER_LABEL[k] || k.replace(/_/g, ' ')
 
 const PAGE_SIZE    = 25
+const FS_FILTER_LIMIT = 500  // max voters to load when a booth/station filter is active
 const GENDER_COLOR = { Male: '#5B5CEB', Female: '#EC4899', Other: '#10B981' }
 const GENDER_BG    = { Male: '#EEF2FF', Female: '#FDF2F8', Other: '#ECFDF5' }
 const CASTE_COLOR  = { General: '#06B6D4', OBC: '#F59E0B', SC: '#8B5CF6', ST: '#10B981' }
@@ -91,10 +95,8 @@ function CellContent({ col, val }) {
   return <span className="text-slate-600 whitespace-nowrap">{v}</span>
 }
 
-// Sync status banner shown above the table
 function SyncBanner({ status, progress }) {
   if (status === 'idle') return null
-
   const configs = {
     syncing: {
       bg: '#EEF2FF', border: '#C7D2FE', icon: <Loader2 size={14} className="animate-spin" style={{ color: '#5B5CEB' }} />,
@@ -112,7 +114,6 @@ function SyncBanner({ status, progress }) {
       color: '#EF4444',
     },
   }
-
   const c = configs[status]
   return (
     <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-[13px] font-medium" style={{ background: c.bg, borderColor: c.border, color: c.color }}>
@@ -120,10 +121,8 @@ function SyncBanner({ status, progress }) {
       <span>{c.text}</span>
       {status === 'syncing' && (
         <div className="ml-auto flex-shrink-0 w-32 h-1.5 rounded-full bg-indigo-100 overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-300"
-            style={{ background: '#5B5CEB', width: `${progress.total ? Math.round(progress.uploaded / progress.total * 100) : 0}%` }}
-          />
+          <div className="h-full rounded-full transition-all duration-300"
+            style={{ background: '#5B5CEB', width: `${progress.total ? Math.round(progress.uploaded / progress.total * 100) : 0}%` }} />
         </div>
       )}
     </div>
@@ -135,18 +134,22 @@ function SyncBanner({ status, progress }) {
 export default function Voters() {
   const fileInputRef = useRef(null)
 
+  // ── data & file state ────
   const [voters, setVoters]           = useState([])
   const [csvHeaders, setCsvHeaders]   = useState(DEFAULT_HEADERS)
   const [hasFile, setHasFile]         = useState(false)
   const [importMeta, setImportMeta]   = useState(null)
   const [metaLoading, setMetaLoading] = useState(true)
 
-  const [syncStatus, setSyncStatus]   = useState('idle') // idle | syncing | done | error
+  // ── sync banner ────
+  const [syncStatus, setSyncStatus]     = useState('idle')
   const [syncProgress, setSyncProgress] = useState({ uploaded: 0, total: 0 })
 
+  // ── column visibility ────
   const [visibleCols, setVisibleCols]   = useState(() => new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
   const [showColPanel, setShowColPanel] = useState(false)
 
+  // ── filter / sort / page ────
   const [search, setSearch]               = useState('')
   const [filterStation, setFilterStation] = useState('')
   const [filterBooth, setFilterBooth]     = useState('')
@@ -154,25 +157,109 @@ export default function Voters() {
   const [page, setPage]                   = useState(1)
   const [drawerVoter, setDrawerVoter]     = useState(null)
 
-  // Check Firestore for existing import on mount
+  // ── Firestore-mode state ────
+  // fsMode = true when data comes from Firestore (not in-memory CSV)
+  const [fsMode, setFsMode]           = useState(false)
+  const [fsLoading, setFsLoading]     = useState(false)
+  const [fsHasMore, setFsHasMore]     = useState(false)
+  const [fsPage, setFsPage]           = useState(1)
+  // fsCursors[i] = Firestore document snapshot to START page i+1 (0-indexed: null = start)
+  const [fsCursors, setFsCursors]     = useState([null])
+  // booths/stations loaded from /booths collection (available after any CSV import)
+  const [boothsList, setBoothsList]   = useState([])
+
+  // ── On mount: load import metadata + booths from Firestore ────
   useEffect(() => {
-    getImportMeta()
-      .then(meta => {
-        if (meta) setImportMeta(meta)
+    Promise.all([getImportMeta(), fetchAllBooths()])
+      .then(([meta, booths]) => {
+        if (booths.length) setBoothsList(booths)
+        if (meta) {
+          setImportMeta(meta)
+          setHasFile(true)
+          setFsMode(true)
+        }
       })
       .catch(() => {})
       .finally(() => setMetaLoading(false))
   }, [])
 
-  // ── derived filter options ────
-  const allStations = useMemo(() => [...new Set(voters.map(v => v.POLLING_STATION))].filter(Boolean).sort(), [voters])
-  const allBooths   = useMemo(() => {
+  // ── Load voters from Firestore whenever fsMode or filters change ────
+  useEffect(() => {
+    if (!fsMode) return
+    const hasFilters = !!(filterBooth || filterStation)
+    // With filters: load a large batch into memory, then use client-side paging/sort/search
+    // Without filters: load one page at a time with cursor pagination
+    const pageSize = hasFilters ? FS_FILTER_LIMIT : PAGE_SIZE
+    setFsLoading(true)
+    setFsPage(1)
+    setPage(1)
+    setFsCursors([null])
+    fetchVotersPage(pageSize, null, {
+      boothNo: filterBooth || undefined,
+      station: filterStation || undefined,
+    }).then(({ docs, lastVisible, hasMore }) => {
+      setVoters(docs)
+      // hasMore only matters for unfiltered cursor-pagination mode
+      setFsHasMore(!hasFilters && hasMore)
+      if (!hasFilters && lastVisible) setFsCursors([null, lastVisible])
+    }).catch(e => console.error('Voter load failed:', e))
+      .finally(() => setFsLoading(false))
+  }, [fsMode, filterBooth, filterStation])
+
+  // ── Firestore next/prev page (only used in unfiltered fsMode) ────
+  const handleFsNext = async () => {
+    if (!fsHasMore || fsLoading) return
+    const nextPage = fsPage + 1
+    const cursor   = fsCursors[fsPage] // last doc of current page → start of next
+    setFsLoading(true)
+    try {
+      const { docs, lastVisible, hasMore } = await fetchVotersPage(PAGE_SIZE, cursor, {})
+      setVoters(docs)
+      setFsHasMore(hasMore)
+      setFsPage(nextPage)
+      if (lastVisible) {
+        setFsCursors(prev => { const n = [...prev]; n[nextPage] = lastVisible; return n })
+      }
+    } catch(e) { console.error(e) }
+    finally { setFsLoading(false) }
+  }
+
+  const handleFsPrev = async () => {
+    if (fsPage <= 1 || fsLoading) return
+    const prevPage = fsPage - 1
+    const cursor   = fsCursors[prevPage - 1] ?? null // entry cursor for prevPage
+    setFsLoading(true)
+    try {
+      const { docs } = await fetchVotersPage(PAGE_SIZE, cursor, {})
+      setVoters(docs)
+      setFsHasMore(true) // there is a next page (we just came from it)
+      setFsPage(prevPage)
+    } catch(e) { console.error(e) }
+    finally { setFsLoading(false) }
+  }
+
+  // ── Derived filter options ────
+  // Use boothsList (from Firestore) in fsMode; derive from in-memory CSV otherwise
+  const allStations = useMemo(() => {
+    if (fsMode && boothsList.length)
+      return [...new Set(boothsList.map(b => b.pollingStation))].filter(Boolean).sort()
+    return [...new Set(voters.map(v => v.POLLING_STATION))].filter(Boolean).sort()
+  }, [fsMode, voters, boothsList])
+
+  const allBooths = useMemo(() => {
+    if (fsMode && boothsList.length) {
+      const base = filterStation ? boothsList.filter(b => b.pollingStation === filterStation) : boothsList
+      return base.map(b => b.boothNo)
+    }
     const base = filterStation ? voters.filter(v => v.POLLING_STATION === filterStation) : voters
     return [...new Set(base.map(v => v.BOOTH_NO))].filter(Boolean).sort()
-  }, [voters, filterStation])
+  }, [fsMode, voters, boothsList, filterStation])
 
-  // ── filtered + sorted ────
+  // ── Client-side filter+sort (used in CSV mode OR fsMode with active filters) ────
+  // In unfiltered fsMode, voters already holds exactly one page — just display it directly.
+  const fsUnfiltered = fsMode && !filterBooth && !filterStation
   const filtered = useMemo(() => {
+    if (fsUnfiltered) return voters // bypass — Firestore already handles pagination
     let data = voters
     if (search) {
       const q = search.toLowerCase()
@@ -191,10 +278,14 @@ export default function Voters() {
       })
     }
     return data
-  }, [voters, search, filterStation, filterBooth, sort, csvHeaders])
+  }, [voters, search, filterStation, filterBooth, sort, csvHeaders, fsUnfiltered])
 
-  const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const pageData    = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page])
+  // Table data: in unfiltered fsMode, show raw Firestore page; otherwise use filtered+paged
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)), [filtered])
+  const pageData   = useMemo(() => {
+    if (fsUnfiltered) return voters
+    return filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  }, [filtered, page, fsUnfiltered, voters])
   const displayCols = csvHeaders.filter(h => visibleCols.has(h))
 
   const pageWindow = useMemo(() => {
@@ -213,15 +304,14 @@ export default function Voters() {
     const text = await file.text()
     const { headers, voters: parsed } = parseCSV(text)
 
-    // Show data immediately (memory-based — fast)
     setVoters(parsed)
     setCsvHeaders(headers)
     setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
     setHasFile(true)
+    setFsMode(false) // back to in-memory CSV mode
     setPage(1)
     setSearch(''); setFilterStation(''); setFilterBooth('')
 
-    // Derive booth/station stats
     const boothSet   = new Set(parsed.map(v => v.BOOTH_NO).filter(Boolean))
     const stationSet = new Set(parsed.map(v => v.POLLING_STATION).filter(Boolean))
     const now = new Date()
@@ -235,7 +325,6 @@ export default function Voters() {
     }
     setImportMeta(meta)
 
-    // Background sync to Firestore
     setSyncStatus('syncing')
     setSyncProgress({ uploaded: 0, total: parsed.length })
     try {
@@ -244,6 +333,8 @@ export default function Voters() {
       })
       await uploadBooths(parsed)
       await saveImportMeta(meta)
+      // Refresh boothsList from Firestore so filter dropdowns update
+      fetchAllBooths().then(b => setBoothsList(b)).catch(() => {})
       setSyncStatus('done')
     } catch (err) {
       console.error('Voter sync failed:', err)
@@ -269,18 +360,17 @@ export default function Voters() {
 
   const openFilePicker = () => fileInputRef.current?.click()
 
+  // Label for "X records found" in unfiltered fsMode
+  const recordsLabel = fsUnfiltered
+    ? `${voters.length} records on this page · ${(importMeta?.records ?? 0).toLocaleString()} total`
+    : `${filtered.length.toLocaleString()} record${filtered.length !== 1 ? 's' : ''} found`
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="-m-6 flex flex-col bg-[#F5F7FB]" style={{ minHeight: 'calc(100vh - 64px)' }}>
 
       {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".csv,text/csv"
-        className="hidden"
-        onChange={handleFileChange}
-      />
+      <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileChange} />
 
       {/* ── Page Header ── */}
       <div className="bg-white border-b border-[#E8ECF4] px-6 py-4 flex-shrink-0" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -368,7 +458,7 @@ export default function Voters() {
               </div>
               <div className="flex items-center gap-8 text-center">
                 {[
-                  ['Records', voters.length.toLocaleString()],
+                  ['Records', (importMeta?.records ?? voters.length).toLocaleString()],
                   ['Booths Detected', (importMeta?.booths ?? 0).toString()],
                   ['Polling Stations', (importMeta?.stations ?? 0).toString()],
                 ].map(([label, val]) => (
@@ -380,12 +470,23 @@ export default function Voters() {
               </div>
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0" style={{ background: '#ECFDF5' }}>
                 <CheckCircle2 size={13} style={{ color: '#10B981' }} />
-                <span className="text-[12px] font-semibold" style={{ color: '#10B981' }}>Imported Successfully</span>
+                <span className="text-[12px] font-semibold" style={{ color: '#10B981' }}>
+                  {fsMode ? 'Loaded from Cloud' : 'Imported Successfully'}
+                </span>
               </div>
             </div>
 
             {/* ─── Sync Status Banner ─── */}
             <SyncBanner status={syncStatus} progress={syncProgress} />
+
+            {/* ─── Firestore loading indicator ─── */}
+            {fsLoading && (
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-[13px] font-medium"
+                style={{ background: '#EEF2FF', borderColor: '#C7D2FE', color: '#5B5CEB' }}>
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading voter data from cloud…</span>
+              </div>
+            )}
 
             {/* ─── Column Visibility Panel ─── */}
             {showColPanel && (
@@ -402,11 +503,8 @@ export default function Voters() {
                   {csvHeaders.map(col => {
                     const on = visibleCols.has(col)
                     return (
-                      <button
-                        key={col}
-                        onClick={() => toggleCol(col)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${on ? 'border-[#5B5CEB] text-[#5B5CEB] bg-[#EEF2FF]' : 'border-[#E8ECF4] text-slate-400 bg-white hover:bg-slate-50'}`}
-                      >
+                      <button key={col} onClick={() => toggleCol(col)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${on ? 'border-[#5B5CEB] text-[#5B5CEB] bg-[#EEF2FF]' : 'border-[#E8ECF4] text-slate-400 bg-white hover:bg-slate-50'}`}>
                         {on ? <Eye size={11} /> : <EyeOff size={11} />}
                         {hl(col)}
                       </button>
@@ -423,9 +521,10 @@ export default function Voters() {
                 <input
                   value={search}
                   onChange={e => { setSearch(e.target.value); setPage(1) }}
-                  placeholder="Search by any field..."
-                  className="w-full pl-9 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-700 placeholder-slate-400 outline-none"
-                  onFocus={e => e.target.style.borderColor = '#5B5CEB'}
+                  placeholder={fsUnfiltered ? 'Select a booth or station to search…' : 'Search by any field…'}
+                  disabled={fsUnfiltered}
+                  className={`w-full pl-9 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-700 placeholder-slate-400 outline-none transition-all ${fsUnfiltered ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onFocus={e => { if (!fsUnfiltered) e.target.style.borderColor = '#5B5CEB' }}
                   onBlur={e => e.target.style.borderColor = '#E8ECF4'}
                 />
                 {search && (
@@ -436,12 +535,10 @@ export default function Voters() {
               </div>
 
               <div className="relative">
-                <select
-                  value={filterStation}
+                <select value={filterStation}
                   onChange={e => { setFilterStation(e.target.value); setFilterBooth(''); setPage(1) }}
                   className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-600 outline-none cursor-pointer"
-                  style={{ minWidth: 160 }}
-                >
+                  style={{ minWidth: 160 }}>
                   <option value="">Polling Station</option>
                   {allStations.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -449,12 +546,10 @@ export default function Voters() {
               </div>
 
               <div className="relative">
-                <select
-                  value={filterBooth}
+                <select value={filterBooth}
                   onChange={e => { setFilterBooth(e.target.value); setPage(1) }}
                   className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-600 outline-none cursor-pointer"
-                  style={{ minWidth: 140 }}
-                >
+                  style={{ minWidth: 140 }}>
                   <option value="">Booth Number</option>
                   {allBooths.map(b => <option key={b} value={b}>Booth {b}</option>)}
                 </select>
@@ -467,9 +562,7 @@ export default function Voters() {
                 </button>
               )}
 
-              <span className="ml-auto text-slate-400 text-[12px] flex-shrink-0">
-                {filtered.length.toLocaleString()} record{filtered.length !== 1 ? 's' : ''} found
-              </span>
+              <span className="ml-auto text-slate-400 text-[12px] flex-shrink-0">{recordsLabel}</span>
             </div>
 
             {/* ─── Table ─── */}
@@ -481,12 +574,11 @@ export default function Voters() {
                       <th className="text-left px-4 py-3 text-slate-400 font-semibold text-[11px] uppercase tracking-wider"
                         style={{ position: 'sticky', left: 0, zIndex: 31, background: '#F8FAFC', width: 48, minWidth: 48 }}>#</th>
                       {displayCols.map((col, ci) => (
-                        <th key={col} onClick={() => handleSort(col)}
-                          className="text-left px-4 py-3 text-slate-500 font-semibold text-[11px] uppercase tracking-wider cursor-pointer select-none whitespace-nowrap"
-                          style={ci === 0 ? { position: 'sticky', left: 48, zIndex: 31, background: '#F8FAFC' } : { background: '#F8FAFC' }}
-                        >
+                        <th key={col} onClick={() => !fsUnfiltered && handleSort(col)}
+                          className={`text-left px-4 py-3 text-slate-500 font-semibold text-[11px] uppercase tracking-wider whitespace-nowrap ${fsUnfiltered ? '' : 'cursor-pointer select-none'}`}
+                          style={ci === 0 ? { position: 'sticky', left: 48, zIndex: 31, background: '#F8FAFC' } : { background: '#F8FAFC' }}>
                           <div className="flex items-center gap-1.5 hover:text-slate-700 transition-colors">
-                            {hl(col)}<SortIcon col={col} sort={sort} />
+                            {hl(col)}{!fsUnfiltered && <SortIcon col={col} sort={sort} />}
                           </div>
                         </th>
                       ))}
@@ -496,7 +588,9 @@ export default function Voters() {
                   </thead>
                   <tbody>
                     {pageData.length === 0 ? (
-                      <tr><td colSpan={displayCols.length + 2} className="text-center py-16 text-slate-400 text-[13px]">No voters match your search or filters.</td></tr>
+                      <tr><td colSpan={displayCols.length + 2} className="text-center py-16 text-slate-400 text-[13px]">
+                        {fsLoading ? 'Loading…' : 'No voters match your search or filters.'}
+                      </td></tr>
                     ) : pageData.map((voter, idx) => (
                       <tr key={voter._id} onClick={() => setDrawerVoter(voter)}
                         className="border-b border-slate-50 cursor-pointer"
@@ -505,7 +599,7 @@ export default function Voters() {
                         onMouseLeave={e => e.currentTarget.style.background = ''}
                       >
                         <td className="px-4 py-3 text-slate-400 text-[11px]" style={{ position: 'sticky', left: 0, zIndex: 10, background: 'inherit' }}>
-                          {(page - 1) * PAGE_SIZE + idx + 1}
+                          {fsUnfiltered ? (fsPage - 1) * PAGE_SIZE + idx + 1 : (page - 1) * PAGE_SIZE + idx + 1}
                         </td>
                         {displayCols.map((col, ci) => (
                           <td key={col} className="px-4 py-3"
@@ -514,7 +608,7 @@ export default function Voters() {
                           </td>
                         ))}
                         <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-1 justify-end">
                             <button onClick={() => setDrawerVoter(voter)} title="View"
                               className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors"><Eye size={14} /></button>
                             <button title="Edit"
@@ -530,29 +624,50 @@ export default function Voters() {
               </div>
 
               {/* ── Pagination ── */}
-              <div className="flex items-center justify-between px-5 py-3 border-t border-[#E8ECF4]">
-                <span className="text-slate-400 text-[12px]">
-                  Showing {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()} of {filtered.length.toLocaleString()} records
-                </span>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setPage(1)} disabled={page === 1}
-                    className="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">«</button>
-                  <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                    className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={14} /></button>
-                  {pageWindow.map(p => (
-                    <button key={p} onClick={() => setPage(p)}
-                      className="w-8 h-8 rounded-lg text-[12px] font-medium transition-colors"
-                      style={page === p ? { background: '#5B5CEB', color: '#fff' } : { color: '#64748B' }}
-                      onMouseEnter={e => { if (page !== p) e.currentTarget.style.background = '#F1F5F9' }}
-                      onMouseLeave={e => { if (page !== p) e.currentTarget.style.background = '' }}
-                    >{p}</button>
-                  ))}
-                  <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                    className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronRight size={14} /></button>
-                  <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
-                    className="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">»</button>
+              {fsUnfiltered ? (
+                /* Firestore cursor pagination — prev/next only */
+                <div className="flex items-center justify-between px-5 py-3 border-t border-[#E8ECF4]">
+                  <span className="text-slate-400 text-[12px]">
+                    Page {fsPage} · {(importMeta?.records ?? 0).toLocaleString()} total records · Select a booth or station for full search
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={handleFsPrev} disabled={fsPage <= 1 || fsLoading}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#E8ECF4] text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                      <ChevronLeft size={14} /> Prev
+                    </button>
+                    <span className="text-slate-400 text-[12px] px-2">Page {fsPage}</span>
+                    <button onClick={handleFsNext} disabled={!fsHasMore || fsLoading}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#E8ECF4] text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                      Next <ChevronRight size={14} />
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* Client-side pagination */
+                <div className="flex items-center justify-between px-5 py-3 border-t border-[#E8ECF4]">
+                  <span className="text-slate-400 text-[12px]">
+                    Showing {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()} of {filtered.length.toLocaleString()} records
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setPage(1)} disabled={page === 1}
+                      className="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">«</button>
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                      className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={14} /></button>
+                    {pageWindow.map(p => (
+                      <button key={p} onClick={() => setPage(p)}
+                        className="w-8 h-8 rounded-lg text-[12px] font-medium transition-colors"
+                        style={page === p ? { background: '#5B5CEB', color: '#fff' } : { color: '#64748B' }}
+                        onMouseEnter={e => { if (page !== p) e.currentTarget.style.background = '#F1F5F9' }}
+                        onMouseLeave={e => { if (page !== p) e.currentTarget.style.background = '' }}
+                      >{p}</button>
+                    ))}
+                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                      className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronRight size={14} /></button>
+                    <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
+                      className="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">»</button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

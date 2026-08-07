@@ -66,14 +66,29 @@ export async function getImportMeta() {
   return snap.exists() ? snap.data() : null
 }
 
-// Paginated voter fetch from Firestore (used when CSV not in memory)
+// Fetch all booths from Firestore (small collection, always available after first import)
+export async function fetchAllBooths() {
+  const snap = await getDocs(collection(db, 'booths'))
+  return snap.docs
+    .map(d => d.data())
+    .sort((a, b) => Number(a.boothNo) - Number(b.boothNo))
+}
+
+// Paginated voter fetch from Firestore (used when CSV not in memory).
+// When booth/station filter is active: no orderBy (avoids composite-index requirement),
+// loads up to pageSize docs and lets the caller do client-side sort.
+// When no filter: orderBy VOTER_NAME + cursor for consistent pagination.
 export async function fetchVotersPage(pageSize = 25, cursor = null, filters = {}) {
-  let q = query(collection(db, 'voters'), orderBy('VOTER_NAME'), limit(pageSize))
-  if (filters.boothNo)     q = query(q, where('BOOTH_NO', '==', filters.boothNo))
-  if (filters.station)     q = query(q, where('POLLING_STATION', '==', filters.station))
-  if (cursor)              q = query(q, startAfter(cursor))
-  const snap = await getDocs(q)
-  const docs = snap.docs.map(d => ({ _id: d.id, ...d.data() }))
-  const lastVisible = snap.docs[snap.docs.length - 1] || null
-  return { docs, lastVisible }
+  const hasFilter = !!(filters.boothNo || filters.station)
+  const constraints = []
+  if (filters.boothNo) constraints.push(where('BOOTH_NO', '==', filters.boothNo))
+  if (filters.station) constraints.push(where('POLLING_STATION', '==', filters.station))
+  if (!hasFilter)      constraints.push(orderBy('VOTER_NAME'))
+  constraints.push(limit(pageSize + 1)) // +1 to detect hasMore
+  if (!hasFilter && cursor) constraints.push(startAfter(cursor))
+  const snap = await getDocs(query(collection(db, 'voters'), ...constraints))
+  const hasMore = snap.docs.length > pageSize
+  const docs = snap.docs.slice(0, pageSize).map(d => ({ _id: d.id, ...d.data() }))
+  const lastVisible = snap.docs[Math.min(pageSize - 1, snap.docs.length - 1)] || null
+  return { docs, lastVisible, hasMore }
 }
