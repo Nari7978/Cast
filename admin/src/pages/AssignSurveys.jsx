@@ -3,7 +3,7 @@ import {
   Plus, Search, X, Edit2, Trash2, Eye, Copy, Download,
   ChevronDown, ChevronLeft, ChevronRight, CheckCircle2,
   MapPin, Users, ClipboardList, Activity, Layers,
-  Calendar, FileText, Target, AlertCircle,
+  Calendar, FileText, Target, AlertCircle, Loader2,
 } from 'lucide-react'
 
 import { subscribePhases } from '../firebase/phaseService'
@@ -65,7 +65,7 @@ function StepBar({ step }) {
 
 // ─── Create Assignment Wizard ─────────────────────────────────────────────────
 
-function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, booths, stations }) {
+function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, booths, stations, boothsLoading }) {
   const [step, setStep]   = useState(1)
   const [phaseId, setPId] = useState(defaultPhaseId || '')
   const [formId, setFId]  = useState('')
@@ -235,8 +235,18 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, bo
 
               {/* Booth checkbox list */}
               <div className="border border-[#E8ECF4] rounded-xl overflow-hidden" style={{ maxHeight: 260, overflowY: 'auto' }}>
-                {filteredBooths.length === 0
-                  ? <p className="text-center py-8 text-slate-400 text-[12px]">No booths found.</p>
+                {boothsLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-10 text-slate-400 text-[12px]">
+                    <Loader2 size={16} className="animate-spin" style={{ color: '#5B5CEB' }} />
+                    <span>Loading booths…</span>
+                  </div>
+                ) : booths.length === 0 ? (
+                  <div className="flex flex-col items-center gap-1 py-10 text-center">
+                    <p className="text-slate-500 text-[12px] font-medium">No booth data found</p>
+                    <p className="text-slate-400 text-[11px]">Import a voter CSV in the Voters page first.</p>
+                  </div>
+                ) : filteredBooths.length === 0
+                  ? <p className="text-center py-8 text-slate-400 text-[12px]">No booths match your filter.</p>
                   : filteredBooths.map(b => (
                     <label key={b.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors border-b border-slate-50 last:border-0 ${selBooths.has(b.id) ? 'bg-indigo-50/50' : 'hover:bg-slate-50'}`}>
                       <input type="checkbox" checked={selBooths.has(b.id)} onChange={() => toggleBooth(b.id)} className="w-4 h-4 rounded accent-indigo-600 flex-shrink-0" />
@@ -317,6 +327,7 @@ export default function AssignSurveys() {
   const [surveyForms, setSurveyForms]   = useState([])
   const [assignments, setAssignments]   = useState([])
   const [booths, setBooths]             = useState(() => readBoothsCache())
+  const [boothsLoading, setBoothsLoading] = useState(true)
   const [agents, setAgents]             = useState([])
   const [selectedPhaseId, setPhaseId]   = useState('')
   const [search, setSearch]             = useState('')
@@ -342,12 +353,12 @@ export default function AssignSurveys() {
     err  => console.error('[AssignSurveys] agents error:', err)
   ), [])
   useEffect(() => {
-    if (booths.length === 0) {
-      fetchAllBooths().then(data => {
+    fetchAllBooths()
+      .then(data => {
         setBooths(data)
         try { localStorage.setItem(BOOTHS_CACHE_KEY, JSON.stringify(data)) } catch {}
       })
-    }
+      .finally(() => setBoothsLoading(false))
   }, [])
 
   const selectedPhase = phases.find(p => p.id === selectedPhaseId)
@@ -695,7 +706,7 @@ export default function AssignSurveys() {
       })()}
 
       {/* ─── Create Wizard ─── */}
-      {showCreate && <CreateWizard defaultPhaseId={selectedPhaseId} onClose={() => setShowCreate(false)} onSave={saveAssignment} phases={phases} surveyForms={surveyForms} booths={wizardBooths} stations={wizardStations} />}
+      {showCreate && <CreateWizard defaultPhaseId={selectedPhaseId} onClose={() => setShowCreate(false)} onSave={saveAssignment} phases={phases} surveyForms={surveyForms} booths={wizardBooths} stations={wizardStations} boothsLoading={boothsLoading} />}
     </div>
   )
 }
