@@ -10,6 +10,10 @@ import {
   uploadBooths, fetchAllBooths,
   saveImportMeta, getImportMeta,
 } from '../firebase/voterService'
+import {
+  cacheVoters, loadCachedVoters,
+  cacheImportMeta, loadCachedImportMeta,
+} from '../utils/voterCache'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -18,7 +22,6 @@ const DEFAULT_HEADERS = [
   'GENDER', 'PART_NO', 'SL_NO', 'MOBILE', 'CASTE',
   'BOOTH_NO', 'POLLING_STATION', 'ADDRESS',
 ]
-
 const HEADER_LABEL = {
   EPIC_NO: 'EPIC No', VOTER_NAME: 'Voter Name', FATHER_NAME: 'Father Name',
   HOUSE_NO: 'House No', AGE: 'Age', GENDER: 'Gender', PART_NO: 'Part No',
@@ -61,6 +64,13 @@ function parseCSV(text) {
   return { headers: rawHeaders, voters }
 }
 
+// Detect which column holds booth numbers and polling station names
+function detectCols(headers) {
+  const boothCol   = headers.find(h => /BOOTH|PART_NO|WARD_NO/.test(h)) || 'BOOTH_NO'
+  const stationCol = headers.find(h => /STATION|POLLING/.test(h))       || 'POLLING_STATION'
+  return { boothCol, stationCol }
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function SortIcon({ col, sort }) {
@@ -79,9 +89,9 @@ function CellContent({ col, val }) {
     return <span className="text-slate-800 font-medium whitespace-nowrap">{v}</span>
   if (col === 'GENDER')
     return <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap" style={{ color: GENDER_COLOR[v], background: GENDER_BG[v] }}>{v}</span>
-  if (col === 'BOOTH_NO')
+  if (col === 'BOOTH_NO' || col === 'BOOTH' || col === 'PART_NO')
     return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold border border-[#C7D2FE] text-[#5B5CEB]" style={{ background: '#EEF2FF' }}>{v}</span>
-  if (col === 'CASTE')
+  if (col === 'CASTE' || col === 'CAST')
     return <span className="text-[11px] font-semibold" style={{ color: CASTE_COLOR[v] || '#64748B' }}>{v}</span>
   if (col === 'AGE')
     return <span className="text-slate-700 font-semibold">{v}</span>
@@ -90,16 +100,15 @@ function CellContent({ col, val }) {
   return <span className="text-slate-600 whitespace-nowrap">{v}</span>
 }
 
-// Upload progress banner
-function UploadBanner({ status, fileName }) {
+function CloudBanner({ status, fileName }) {
   if (status === 'idle') return null
   const cfg = {
-    uploading: { bg: '#EEF2FF', border: '#C7D2FE', color: '#5B5CEB', icon: <Loader2 size={14} className="animate-spin" style={{ color: '#5B5CEB' }} />, text: `Uploading ${fileName}…` },
-    done:      { bg: '#ECFDF5', border: '#A7F3D0', color: '#10B981', icon: <CheckCircle2 size={14} style={{ color: '#10B981' }} />, text: 'Voter list uploaded and saved to cloud.' },
-    error:     { bg: '#FEF2F2', border: '#FECACA', color: '#EF4444', icon: <AlertCircle size={14} style={{ color: '#EF4444' }} />, text: 'Upload failed. Check your connection and try again.' },
+    uploading: { bg: '#EEF2FF', border: '#C7D2FE', color: '#5B5CEB', icon: <Cloud size={14} className="animate-pulse" />, text: `Saving backup to cloud…` },
+    done:      { bg: '#ECFDF5', border: '#A7F3D0', color: '#10B981', icon: <CheckCircle2 size={14} />, text: 'Cloud backup saved.' },
+    error:     { bg: '#FEF9EC', border: '#FDE68A', color: '#D97706', icon: <AlertCircle size={14} />, text: 'Cloud backup failed — data still saved locally.' },
   }[status]
   return (
-    <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-[13px] font-medium"
+    <div className="flex items-center gap-2 px-4 py-2 rounded-xl border text-[12px] font-medium"
       style={{ background: cfg.bg, borderColor: cfg.border, color: cfg.color }}>
       {cfg.icon}<span>{cfg.text}</span>
     </div>
@@ -111,17 +120,17 @@ function UploadBanner({ status, fileName }) {
 export default function Voters() {
   const fileInputRef = useRef(null)
 
-  const [voters, setVoters]           = useState([])
-  const [csvHeaders, setCsvHeaders]   = useState(DEFAULT_HEADERS)
-  const [hasFile, setHasFile]         = useState(false)
-  const [importMeta, setImportMeta]   = useState(null)
+  const [voters, setVoters]         = useState([])
+  const [csvHeaders, setCsvHeaders] = useState(DEFAULT_HEADERS)
+  const [hasFile, setHasFile]       = useState(false)
+  const [importMeta, setImportMeta] = useState(null)
 
-  // 'idle' | 'loading' (downloading CSV on return) | 'ready' | 'error'
-  const [loadStatus, setLoadStatus]   = useState('idle')
+  // 'idle' | 'loading' | 'ready' | 'error'
+  const [loadStatus,   setLoadStatus]   = useState('idle')
   // 'idle' | 'uploading' | 'done' | 'error'
-  const [uploadStatus, setUploadStatus] = useState('idle')
+  const [cloudStatus,  setCloudStatus]  = useState('idle')
 
-  const [visibleCols, setVisibleCols]   = useState(() => new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
+  const [visibleCols, setVisibleCols] = useState(() => new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
   const [showColPanel, setShowColPanel] = useState(false)
 
   const [search, setSearch]               = useState('')
@@ -131,35 +140,61 @@ export default function Voters() {
   const [page, setPage]                   = useState(1)
   const [drawerVoter, setDrawerVoter]     = useState(null)
 
-  // Booths loaded from Firestore for filter dropdowns
-  const [boothsList, setBoothsList]   = useState([])
-
-  // ── On mount: check for existing import, download CSV if found ────
+  // ── On mount: restore from IndexedDB (instant, no network) ────
   useEffect(() => {
-    getImportMeta()
-      .then(async meta => {
-        if (!meta) return
-        setImportMeta(meta)
-        if (!meta.storageUrl) return // old Firestore-based import, no CSV stored
-        setHasFile(true)
-        setLoadStatus('loading')
-        try {
-          const [text, booths] = await Promise.all([
-            downloadVoterCSV(meta.storageUrl),
-            fetchAllBooths(),
-          ])
-          const { headers, voters: parsed } = parseCSV(text)
-          setVoters(parsed)
-          setCsvHeaders(headers)
-          setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
-          setBoothsList(booths)
+    const cachedMeta = loadCachedImportMeta()
+
+    if (cachedMeta?.records && cachedMeta?.csvHeaders) {
+      // We have metadata — show table immediately
+      setImportMeta(cachedMeta)
+      setCsvHeaders(cachedMeta.csvHeaders)
+      setVisibleCols(new Set(cachedMeta.csvHeaders.filter(h => h !== 'ADDRESS')))
+      setHasFile(true)
+      setLoadStatus('loading')
+
+      loadCachedVoters().then(cached => {
+        if (cached.length > 0) {
+          // IndexedDB hit — instant
+          setVoters(cached)
           setLoadStatus('ready')
-        } catch(e) {
-          console.error('CSV download failed:', e)
-          setLoadStatus('error')
+        } else if (cachedMeta.storageUrl) {
+          // IndexedDB cleared (different browser/device) — download from Storage
+          downloadVoterCSV(cachedMeta.storageUrl)
+            .then(text => {
+              const { voters: parsed } = parseCSV(text)
+              setVoters(parsed)
+              cacheVoters(parsed) // populate IndexedDB for next time
+              setLoadStatus('ready')
+            })
+            .catch(() => setLoadStatus('error'))
+        } else {
+          // No local cache, no cloud backup → re-upload required
+          setLoadStatus('idle')
+          setHasFile(false)
         }
       })
-      .catch(() => setLoadStatus('idle'))
+    } else {
+      // No local meta — check Firestore (first load on a new device)
+      getImportMeta()
+        .then(meta => {
+          if (!meta?.storageUrl) return
+          cacheImportMeta({ ...meta, csvHeaders: DEFAULT_HEADERS }) // best guess
+          setImportMeta(meta)
+          setHasFile(true)
+          setLoadStatus('loading')
+          return downloadVoterCSV(meta.storageUrl)
+            .then(text => {
+              const { headers, voters: parsed } = parseCSV(text)
+              setVoters(parsed)
+              setCsvHeaders(headers)
+              setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
+              cacheVoters(parsed)
+              cacheImportMeta({ ...meta, csvHeaders: headers })
+              setLoadStatus('ready')
+            })
+        })
+        .catch(() => {})
+    }
   }, [])
 
   // ── CSV file upload handler ────
@@ -168,19 +203,18 @@ export default function Voters() {
     if (!file) return
     e.target.value = ''
 
-    // 1. Parse locally — table shows immediately
+    // 1. Parse CSV
     const text = await file.text()
     const { headers, voters: parsed } = parseCSV(text)
+    const { boothCol, stationCol } = detectCols(headers)
 
-    // Auto-detect booth / station columns regardless of CSV naming convention
-    const boothCol   = headers.find(h => /BOOTH|PART_NO|WARD_NO/.test(h)) || 'BOOTH_NO'
-    const stationCol = headers.find(h => /STATION|POLLING/.test(h))       || 'POLLING_STATION'
-
+    // 2. Show table immediately
     setVoters(parsed)
     setCsvHeaders(headers)
     setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
     setHasFile(true)
     setLoadStatus('ready')
+    setCloudStatus('idle')
     setPage(1)
     setSearch(''); setFilterStation(''); setFilterBooth('')
 
@@ -195,49 +229,43 @@ export default function Voters() {
       stations: stationSet.size,
       boothCol,
       stationCol,
+      csvHeaders: headers,
     }
     setImportMeta(meta)
 
-    // 2. Save meta immediately (storageUrl pending) so navigating away doesn't lose the record
-    await saveImportMeta({ ...meta, storageUrl: null })
+    // 3. Save to IndexedDB immediately — persistent, no network, fast
+    cacheImportMeta(meta)
+    cacheVoters(parsed) // ~0.5s for 30K rows, runs without blocking UI
 
-    // 3. Upload CSV file + booths in background
-    setUploadStatus('uploading')
-    try {
-      const storageUrl = await uploadVoterCSV(file)
-      await uploadBooths(parsed, boothCol, stationCol)
-      const booths = await fetchAllBooths()
-      setBoothsList(booths)
-      // Update meta with completed storageUrl
-      await saveImportMeta({ ...meta, storageUrl })
-      setUploadStatus('done')
-    } catch(err) {
-      console.error('Upload failed:', err)
-      setUploadStatus('error')
-    }
+    // 4. Cloud backup in background (optional but enables cross-device access)
+    setCloudStatus('uploading')
+    Promise.all([
+      uploadVoterCSV(file),
+      uploadBooths(parsed, boothCol, stationCol),
+    ]).then(async ([storageUrl]) => {
+      const fullMeta = { ...meta, storageUrl }
+      await saveImportMeta(fullMeta)
+      cacheImportMeta(fullMeta) // update local cache with storageUrl
+      setImportMeta(fullMeta)
+      setCloudStatus('done')
+    }).catch(() => setCloudStatus('error'))
   }, [])
 
-  // Detected column names — read from meta (persisted) or derived from CSV headers
+  // ── Detected column names from meta ────
   const boothCol   = importMeta?.boothCol   || csvHeaders.find(h => /BOOTH|PART_NO|WARD_NO/.test(h)) || 'BOOTH_NO'
   const stationCol = importMeta?.stationCol || csvHeaders.find(h => /STATION|POLLING/.test(h))       || 'POLLING_STATION'
 
-  // ── Derived filter options ────
-  const allStations = useMemo(() => {
-    if (boothsList.length)
-      return [...new Set(boothsList.map(b => b.pollingStation))].filter(Boolean).sort()
-    return [...new Set(voters.map(v => v[stationCol]))].filter(Boolean).sort()
-  }, [voters, boothsList, stationCol])
+  // ── Derived filter options (from in-memory voters) ────
+  const allStations = useMemo(() =>
+    [...new Set(voters.map(v => v[stationCol]))].filter(Boolean).sort()
+  , [voters, stationCol])
 
   const allBooths = useMemo(() => {
-    if (boothsList.length) {
-      const base = filterStation ? boothsList.filter(b => b.pollingStation === filterStation) : boothsList
-      return base.map(b => b.boothNo)
-    }
     const base = filterStation ? voters.filter(v => v[stationCol] === filterStation) : voters
     return [...new Set(base.map(v => v[boothCol]))].filter(Boolean).sort((a, b) => Number(a) - Number(b))
-  }, [voters, boothsList, filterStation, boothCol, stationCol])
+  }, [voters, filterStation, boothCol, stationCol])
 
-  // ── Filtered + sorted + paged (all client-side — data is in memory) ────
+  // ── Filtered + sorted + paged ────
   const filtered = useMemo(() => {
     let data = voters
     if (search) {
@@ -257,7 +285,7 @@ export default function Voters() {
       })
     }
     return data
-  }, [voters, search, filterStation, filterBooth, sort, csvHeaders])
+  }, [voters, search, filterStation, filterBooth, sort, csvHeaders, boothCol, stationCol])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageData   = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page])
@@ -281,7 +309,6 @@ export default function Voters() {
   })
   const clearFilters = () => { setSearch(''); setFilterStation(''); setFilterBooth(''); setPage(1) }
   const hasActiveFilters = search || filterStation || filterBooth
-  const openFilePicker = () => fileInputRef.current?.click()
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -307,7 +334,7 @@ export default function Voters() {
                 </button>
               </>
             )}
-            <button onClick={openFilePicker}
+            <button onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
               style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)', boxShadow: '0 2px 8px rgba(91,92,235,0.3)' }}>
               <Upload size={14} /> {hasFile ? 'Re-import CSV' : 'Import CSV'}
@@ -316,28 +343,27 @@ export default function Voters() {
         </div>
       </div>
 
-      {/* ── Body ── */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
-        {/* ── Loading spinner (downloading CSV on return visit) ── */}
+        {/* Loading from IndexedDB */}
         {loadStatus === 'loading' && (
           <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
             <div className="text-center">
               <Loader2 size={36} className="animate-spin mx-auto mb-4" style={{ color: '#5B5CEB' }} />
-              <p className="text-slate-700 font-semibold text-[15px]">Loading voter list…</p>
-              <p className="text-slate-400 text-[13px] mt-1">Downloading from cloud storage</p>
+              <p className="text-slate-700 font-semibold text-[15px]">Restoring voter list…</p>
+              <p className="text-slate-400 text-[13px] mt-1">Loading from local storage</p>
             </div>
           </div>
         )}
 
-        {/* ── Error downloading ── */}
+        {/* Download error */}
         {loadStatus === 'error' && (
           <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
             <div className="bg-white rounded-2xl border border-red-100 p-10 text-center max-w-sm">
               <AlertCircle size={32} className="mx-auto mb-3" style={{ color: '#EF4444' }} />
-              <p className="text-slate-800 font-bold text-[15px] mb-1">Could not load voter list</p>
-              <p className="text-slate-400 text-[13px] mb-5">Download from cloud failed. Re-upload the CSV file to restore.</p>
-              <button onClick={openFilePicker}
+              <p className="text-slate-800 font-bold text-[15px] mb-1">Could not restore voter list</p>
+              <p className="text-slate-400 text-[13px] mb-5">Please re-upload the CSV file.</p>
+              <button onClick={() => fileInputRef.current?.click()}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-semibold"
                 style={{ background: '#5B5CEB' }}>
                 <Upload size={14} /> Upload CSV File
@@ -346,17 +372,18 @@ export default function Voters() {
           </div>
         )}
 
-        {/* ── Empty state ── */}
+        {/* Empty state */}
         {loadStatus === 'idle' && !hasFile && (
           <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
             <div className="bg-white rounded-2xl border-2 border-dashed border-[#C7D2FE] p-14 text-center max-w-md w-full" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
               <div className="w-18 h-18 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ width: 72, height: 72, background: '#EEF2FF' }}>
                 <Users size={30} style={{ color: '#5B5CEB' }} />
               </div>
-              {importMeta && !importMeta.storageUrl ? (
+              {importMeta ? (
                 <>
                   <h3 className="text-slate-800 font-bold text-[18px] mb-1">Previous import found</h3>
-                  <p className="text-slate-400 text-[12px] mb-6">Re-upload the CSV to view voter records.</p>
+                  <p className="text-slate-500 text-[13px] mb-1">{importMeta.name}</p>
+                  <p className="text-slate-400 text-[12px] mb-6">{importMeta.records?.toLocaleString()} voters · Re-upload to restore.</p>
                 </>
               ) : (
                 <>
@@ -366,7 +393,7 @@ export default function Voters() {
                   </p>
                 </>
               )}
-              <button onClick={openFilePicker}
+              <button onClick={() => fileInputRef.current?.click()}
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white text-[14px] font-semibold hover:opacity-90 transition-opacity"
                 style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)', boxShadow: '0 2px 8px rgba(91,92,235,0.3)' }}>
                 <Upload size={16} /> Upload CSV File
@@ -375,7 +402,7 @@ export default function Voters() {
           </div>
         )}
 
-        {/* ── Main content ── */}
+        {/* Main content */}
         {loadStatus === 'ready' && hasFile && (
           <>
             {/* File card */}
@@ -384,14 +411,14 @@ export default function Voters() {
                 <FileText size={18} style={{ color: '#5B5CEB' }} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-slate-800 font-semibold text-[14px]">{importMeta?.name || 'Imported File'}</p>
+                <p className="text-slate-800 font-semibold text-[14px] truncate">{importMeta?.name || 'Imported File'}</p>
                 <p className="text-slate-400 text-[12px] mt-0.5">Imported on {importMeta?.importedOn}</p>
               </div>
               <div className="flex items-center gap-8 text-center">
                 {[
                   ['Records', voters.length.toLocaleString()],
-                  ['Booths', (importMeta?.booths ?? 0).toString()],
-                  ['Polling Stations', (importMeta?.stations ?? 0).toString()],
+                  ['Booths', (importMeta?.booths ?? allBooths.length).toString()],
+                  ['Polling Stations', (importMeta?.stations ?? allStations.length).toString()],
                 ].map(([label, val]) => (
                   <div key={label}>
                     <p className="text-slate-800 font-bold text-[17px]">{val}</p>
@@ -405,8 +432,8 @@ export default function Voters() {
               </div>
             </div>
 
-            {/* Upload banner (background cloud sync) */}
-            <UploadBanner status={uploadStatus} fileName={importMeta?.name} />
+            {/* Cloud backup status */}
+            <CloudBanner status={cloudStatus} />
 
             {/* Column panel */}
             {showColPanel && (
@@ -566,31 +593,10 @@ export default function Voters() {
             style={{ width: 380, boxShadow: '-4px 0 24px rgba(0,0,0,0.10)' }}>
             <div className="px-5 py-4 border-b border-[#E8ECF4] flex items-start justify-between flex-shrink-0">
               <div>
-                <p className="text-slate-800 font-bold text-[15px]">{drawerVoter.VOTER_NAME || 'Voter Details'}</p>
-                <p className="text-slate-400 text-[12px] mt-0.5 font-mono">{drawerVoter.EPIC_NO}</p>
+                <p className="text-slate-800 font-bold text-[15px]">{drawerVoter.VOTER_NAME || drawerVoter[csvHeaders[1]] || 'Voter Details'}</p>
+                <p className="text-slate-400 text-[12px] mt-0.5 font-mono">{drawerVoter.EPIC_NO || drawerVoter[csvHeaders[0]]}</p>
               </div>
-              <button onClick={() => setDrawerVoter(null)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors mt-0.5"><X size={16} /></button>
-            </div>
-            <div className="px-5 py-4 border-b border-[#E8ECF4] flex-shrink-0" style={{ background: '#FAFBFF' }}>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-[18px] flex-shrink-0"
-                  style={{ background: GENDER_COLOR[drawerVoter.GENDER] || '#5B5CEB' }}>
-                  {String(drawerVoter.VOTER_NAME || '?')[0].toUpperCase()}
-                </div>
-                <div>
-                  <p className="text-slate-800 font-semibold text-[14px]">{drawerVoter.VOTER_NAME}</p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                      style={{ color: GENDER_COLOR[drawerVoter.GENDER], background: GENDER_BG[drawerVoter.GENDER] }}>
-                      {drawerVoter.GENDER}</span>
-                    <span className="text-slate-400 text-[12px]">·</span>
-                    <span className="text-slate-500 text-[12px]">{drawerVoter.AGE} years</span>
-                    <span className="text-slate-400 text-[12px]">·</span>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md border border-[#C7D2FE] text-[#5B5CEB]" style={{ background: '#EEF2FF' }}>
-                      Booth {drawerVoter.BOOTH_NO}</span>
-                  </div>
-                </div>
-              </div>
+              <button onClick={() => setDrawerVoter(null)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"><X size={16} /></button>
             </div>
             <div className="flex-1 overflow-y-auto">
               <div className="px-5 py-2">
@@ -599,22 +605,20 @@ export default function Voters() {
                   if (val === undefined || val === null || val === '') return null
                   return (
                     <div key={key} className="flex items-start py-3 border-b border-slate-50 last:border-0 gap-3">
-                      <span className="text-slate-400 text-[12px] w-36 flex-shrink-0 pt-0.5">{hl(key)}</span>
+                      <span className="text-slate-400 text-[12px] w-40 flex-shrink-0 pt-0.5">{hl(key)}</span>
                       <span className="text-slate-700 text-[12px] font-medium flex-1 text-right break-words">{String(val)}</span>
                     </div>
                   )
                 })}
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-[#E8ECF4] flex-shrink-0">
-              <div className="flex gap-2">
-                <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">
-                  <Edit2 size={14} /> Edit Voter
-                </button>
-                <button className="flex items-center justify-center px-4 py-2.5 rounded-xl border border-red-100 text-red-400 text-[13px] font-medium hover:bg-red-50 hover:text-red-600 transition-colors">
-                  <Trash2 size={14} />
-                </button>
-              </div>
+            <div className="px-5 py-4 border-t border-[#E8ECF4] flex-shrink-0 flex gap-2">
+              <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">
+                <Edit2 size={14} /> Edit Voter
+              </button>
+              <button className="flex items-center justify-center px-4 py-2.5 rounded-xl border border-red-100 text-red-400 text-[13px] font-medium hover:bg-red-50 hover:text-red-600 transition-colors">
+                <Trash2 size={14} />
+              </button>
             </div>
           </div>
         </>
