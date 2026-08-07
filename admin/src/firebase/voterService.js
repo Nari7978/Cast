@@ -2,23 +2,15 @@ import {
   collection, doc, writeBatch, serverTimestamp,
   setDoc, getDoc, getDocs, deleteDoc,
 } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { ref, uploadBytes } from 'firebase/storage'
 import { db, storage } from './config'
 
 const CHUNK_SIZE = 400
 
 // ── CSV → Firebase Storage ────────────────────────────────────────────────────
-export async function uploadVoterCSV(file, onProgress) {
+export async function uploadVoterCSV(file) {
   const storageRef = ref(storage, 'voter_imports/latest.csv')
   await uploadBytes(storageRef, file, { contentType: 'text/csv' })
-  onProgress?.('done')
-  return getDownloadURL(storageRef)
-}
-
-export async function downloadVoterCSV(url) {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`CSV download failed: ${res.status}`)
-  return res.text()
 }
 
 // ── Booths (small collection, kept in Firestore) ─────────────────────────────

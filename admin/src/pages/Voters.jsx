@@ -6,9 +6,9 @@ import {
   AlertCircle, Cloud,
 } from 'lucide-react'
 import {
-  uploadVoterCSV, downloadVoterCSV,
+  uploadVoterCSV,
   uploadBooths,
-  saveImportMeta, getImportMeta,
+  saveImportMeta,
   deleteImportMeta,
 } from '../firebase/voterService'
 import {
@@ -109,61 +109,27 @@ export default function Voters() {
   const [showConfirmClear, setShowConfirmClear] = useState(false)
   const [clearing, setClearing]                 = useState(false)
 
-  // ── On mount: restore from IndexedDB (instant, no network) ────
+  // ── On mount: restore from IndexedDB only (no network fetch on load) ────
   useEffect(() => {
     const cachedMeta = loadCachedImportMeta()
+    if (!cachedMeta?.records || !cachedMeta?.csvHeaders) return
 
-    if (cachedMeta?.records && cachedMeta?.csvHeaders) {
-      // We have metadata — show table immediately
-      setImportMeta(cachedMeta)
-      setCsvHeaders(cachedMeta.csvHeaders)
-      setVisibleCols(new Set(cachedMeta.csvHeaders.filter(h => h !== 'ADDRESS')))
-      setHasFile(true)
-      setLoadStatus('loading')
+    setImportMeta(cachedMeta)
+    setCsvHeaders(cachedMeta.csvHeaders)
+    setVisibleCols(new Set(cachedMeta.csvHeaders.filter(h => h !== 'ADDRESS')))
+    setHasFile(true)
+    setLoadStatus('loading')
 
-      loadCachedVoters().then(cached => {
-        if (cached.length > 0) {
-          // IndexedDB hit — instant
-          setVoters(cached)
-          setLoadStatus('ready')
-        } else if (cachedMeta.storageUrl) {
-          // IndexedDB cleared (different browser/device) — download from Storage
-          downloadVoterCSV(cachedMeta.storageUrl)
-            .then(text => {
-              const { voters: parsed } = parseCSV(text)
-              setVoters(parsed)
-              cacheVoters(parsed) // populate IndexedDB for next time
-              setLoadStatus('ready')
-            })
-            .catch(() => setLoadStatus('error'))
-        } else {
-          // No local cache, no cloud backup → re-upload required
-          setLoadStatus('idle')
-          setHasFile(false)
-        }
-      })
-    } else {
-      // No local meta — check Firestore (first load / different device)
-      getImportMeta()
-        .then(meta => {
-          if (!meta?.storageUrl) return
-          cacheImportMeta({ ...meta, csvHeaders: DEFAULT_HEADERS })
-          setImportMeta(meta)
-          setHasFile(true)
-          setLoadStatus('loading')
-          return downloadVoterCSV(meta.storageUrl)
-            .then(text => {
-              const { headers, voters: parsed } = parseCSV(text)
-              setVoters(parsed)
-              setCsvHeaders(headers)
-              setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
-              cacheVoters(parsed)
-              cacheImportMeta({ ...meta, csvHeaders: headers })
-              setLoadStatus('ready')
-            })
-        })
-        .catch(() => {})
-    }
+    loadCachedVoters().then(cached => {
+      if (cached.length > 0) {
+        setVoters(cached)
+        setLoadStatus('ready')
+      } else {
+        // IndexedDB empty — re-upload required
+        setLoadStatus('idle')
+        setHasFile(false)
+      }
+    }).catch(() => { setLoadStatus('idle'); setHasFile(false) })
   }, [])
 
   // ── CSV file upload handler ────
@@ -211,11 +177,8 @@ export default function Voters() {
     Promise.all([
       uploadVoterCSV(file),
       uploadBooths(parsed, boothCol, stationCol),
-    ]).then(async ([storageUrl]) => {
-      const fullMeta = { ...meta, storageUrl }
-      await saveImportMeta(fullMeta)
-      cacheImportMeta(fullMeta) // update local cache with storageUrl
-      setImportMeta(fullMeta)
+    ]).then(async () => {
+      await saveImportMeta(meta)
       setCloudStatus('done')
     }).catch(() => setCloudStatus('error'))
   }, [])
