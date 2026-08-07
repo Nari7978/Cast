@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Search, Plus, Upload, Download, MapPin, Users, UserCheck,
   AlertCircle, Eye, Edit2, Trash2, X, ChevronDown,
@@ -164,6 +165,7 @@ function writeBoothCache(data) {
 }
 
 export default function Booths() {
+  const navigate = useNavigate()
   const [booths,   setBooths]   = useState(() => readBoothCache() ?? [])
   const [agents,   setAgents]   = useState([])
   const [loading,  setLoading]  = useState(() => !readBoothCache())
@@ -178,7 +180,11 @@ export default function Booths() {
   // ── Load booths: serve cache instantly, refresh from Firestore in background ─
   useEffect(() => {
     fetchAllBooths()
-      .then(data => { setBooths(data); writeBoothCache(data); setLoading(false) })
+      .then(data => {
+        setBooths(data)
+        if (data.length > 0) writeBoothCache(data) // never overwrite a good cache with empty
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
 
     const unsub = subscribeAgents(data => setAgents(data))
@@ -354,8 +360,13 @@ export default function Booths() {
               {booths.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
                   <MapPin size={24} className="text-slate-200 mb-2" />
-                  <p className="text-slate-400 text-[12px]">No booth data yet.</p>
-                  <p className="text-slate-300 text-[11px] mt-1">Import a voter CSV first.</p>
+                  <p className="text-slate-500 text-[12px] font-medium">No booth data yet.</p>
+                  <p className="text-slate-300 text-[11px] mt-1 mb-3">Import a voter CSV first.</p>
+                  <button onClick={() => navigate('/voters')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white hover:opacity-90 transition-opacity"
+                    style={{ background: '#5B5CEB' }}>
+                    <Upload size={11} /> Go to Voters
+                  </button>
                 </div>
               ) : filteredStations.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
