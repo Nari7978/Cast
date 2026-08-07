@@ -12,10 +12,6 @@ import { subscribeAssignments, createAssignment, deleteAssignment as deleteAssig
 import { fetchAllBooths } from '../firebase/voterService'
 import { subscribeAgents } from '../firebase/agentService'
 
-const BOOTHS_CACHE_KEY = 'cast_booths_cache'
-function readBoothsCache() {
-  try { const v = localStorage.getItem(BOOTHS_CACHE_KEY); return v ? JSON.parse(v) : [] } catch { return [] }
-}
 
 
 const STATUS_CFG = {
@@ -334,7 +330,7 @@ export default function AssignSurveys() {
   const [phases, setPhases]             = useState([])
   const [surveyForms, setSurveyForms]   = useState([])
   const [assignments, setAssignments]   = useState([])
-  const [booths, setBooths]             = useState(() => readBoothsCache())
+  const [booths, setBooths]             = useState([])
   const [boothsLoading, setBoothsLoading] = useState(true)
   const [agents, setAgents]             = useState([])
   const [selectedPhaseId, setPhaseId]   = useState('')
@@ -362,10 +358,7 @@ export default function AssignSurveys() {
   ), [])
   useEffect(() => {
     fetchAllBooths()
-      .then(data => {
-        setBooths(data)
-        try { localStorage.setItem(BOOTHS_CACHE_KEY, JSON.stringify(data)) } catch {}
-      })
+      .then(data => setBooths(data))
       .finally(() => setBoothsLoading(false))
   }, [])
 

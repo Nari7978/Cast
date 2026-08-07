@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import {
   uploadVoterCSV, downloadVoterCSV,
-  uploadBooths, fetchAllBooths,
+  uploadBooths,
   saveImportMeta, getImportMeta,
   clearBooths, deleteImportMeta,
 } from '../firebase/voterService'
@@ -271,12 +271,6 @@ export default function Voters() {
       await saveImportMeta(fullMeta)
       cacheImportMeta(fullMeta) // update local cache with storageUrl
       setImportMeta(fullMeta)
-      // Refresh the booth cache so Booths page sees data instantly on next visit
-      fetchAllBooths().then(data => {
-        if (data.length > 0) {
-          try { localStorage.setItem('cast_booths_cache', JSON.stringify(data)) } catch {}
-        }
-      })
       setCloudStatus('done')
     }).catch(() => setCloudStatus('error'))
   }, [])
@@ -335,7 +329,6 @@ export default function Voters() {
     try {
       // Clear local caches first (instant)
       await clearVoterCache()
-      localStorage.removeItem('cast_booths_cache')
       // Clear Firestore data in background (best effort)
       await Promise.allSettled([clearBooths(), deleteImportMeta()])
     } finally {

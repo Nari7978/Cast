@@ -154,21 +154,13 @@ function NoBoothsFound() {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-const PAGE_SIZE  = 10
-const CACHE_KEY  = 'cast_booths_cache'
-
-function readBoothCache() {
-  try { const v = localStorage.getItem(CACHE_KEY); return v ? JSON.parse(v) : null } catch { return null }
-}
-function writeBoothCache(data) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)) } catch {}
-}
+const PAGE_SIZE = 10
 
 export default function Booths() {
   const navigate = useNavigate()
-  const [booths,   setBooths]   = useState(() => readBoothCache() ?? [])
+  const [booths,   setBooths]   = useState([])
   const [agents,   setAgents]   = useState([])
-  const [loading,  setLoading]  = useState(() => !readBoothCache())
+  const [loading,  setLoading]  = useState(true)
 
   const [selectedStation, setSelectedStation] = useState(null)
   const [selectedBooth,   setSelectedBooth]   = useState(null)
@@ -177,14 +169,9 @@ export default function Booths() {
   const [statusFilter,    setStatusFilter]    = useState('All')
   const [page,            setPage]            = useState(1)
 
-  // ── Load booths: serve cache instantly, refresh from Firestore in background ─
   useEffect(() => {
     fetchAllBooths()
-      .then(data => {
-        setBooths(data)
-        if (data.length > 0) writeBoothCache(data) // never overwrite a good cache with empty
-        setLoading(false)
-      })
+      .then(data => { setBooths(data); setLoading(false) })
       .catch(() => setLoading(false))
 
     const unsub = subscribeAgents(data => setAgents(data))
