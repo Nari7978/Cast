@@ -20,12 +20,20 @@ export default function Login() {
       return
     }
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 800))
-    const ok = login(email, password)
-    if (ok) {
+    try {
+      await login(email, password)
       navigate('/')
-    } else {
-      setError('Invalid credentials. Please try again.')
+    } catch (err) {
+      const code = err?.code || ''
+      if (code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+        setError('No account found with these credentials.')
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many failed attempts. Please wait and try again.')
+      } else if (code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.')
+      } else {
+        setError('Sign in failed. Please check your credentials.')
+      }
     }
     setLoading(false)
   }
