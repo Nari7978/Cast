@@ -29,14 +29,24 @@ export async function uploadBooths(voters, boothCol = 'BOOTH_NO', stationCol = '
     boothMap[key].voterCount++
   })
 
-  await clearBooths()
-
   const entries = Object.values(boothMap)
+  const newKeys = new Set(entries.map(b => b.boothNo))
+
+  // Write new booths first — Firestore is never empty during the update
   for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
     const batch = writeBatch(db)
     entries.slice(i, i + CHUNK_SIZE).forEach(booth => {
       batch.set(doc(db, 'booths', booth.boothNo), booth)
     })
+    await batch.commit()
+  }
+
+  // Then remove any booths that are no longer in the new CSV
+  const snap = await getDocs(collection(db, 'booths'))
+  const stale = snap.docs.filter(d => !newKeys.has(d.id))
+  for (let i = 0; i < stale.length; i += CHUNK_SIZE) {
+    const batch = writeBatch(db)
+    stale.slice(i, i + CHUNK_SIZE).forEach(d => batch.delete(d.ref))
     await batch.commit()
   }
 }

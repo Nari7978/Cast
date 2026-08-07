@@ -178,6 +178,7 @@ export default function Voters() {
       saveImportMeta(meta),
     ]).then(() => {
       setCloudStatus('done')
+      setTimeout(() => setCloudStatus('idle'), 3000)
     }).catch(() => setCloudStatus('error'))
   }, [])
 
