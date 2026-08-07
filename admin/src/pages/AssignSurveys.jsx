@@ -9,7 +9,7 @@ import {
 import { subscribePhases } from '../firebase/phaseService'
 import { subscribeSurveyForms } from '../firebase/surveyService'
 import { subscribeAssignments, createAssignment, deleteAssignment as deleteAssignmentSvc } from '../firebase/assignmentService'
-import { fetchAllBooths, recoverBoothsFromStorage } from '../firebase/voterService'
+import { fetchAllBooths } from '../firebase/voterService'
 import { subscribeAgents } from '../firebase/agentService'
 
 
@@ -357,15 +357,9 @@ export default function AssignSurveys() {
     err  => console.error('[AssignSurveys] agents error:', err)
   ), [])
   useEffect(() => {
-    fetchAllBooths().then(async data => {
-      if (data.length > 0) {
-        setBooths(data)
-      } else {
-        const recovered = await recoverBoothsFromStorage().catch(() => [])
-        setBooths(recovered)
-      }
-      setBoothsLoading(false)
-    }).catch(() => setBoothsLoading(false))
+    fetchAllBooths()
+      .then(data => { setBooths(data); setBoothsLoading(false) })
+      .catch(() => setBoothsLoading(false))
   }, [])
 
   const selectedPhase = phases.find(p => p.id === selectedPhaseId)

@@ -6,10 +6,10 @@ import {
   AlertCircle, Cloud,
 } from 'lucide-react'
 import {
-  uploadVoterCSV, downloadVoterCSV, downloadVoterCSVFromStorage,
+  uploadVoterCSV, downloadVoterCSV,
   uploadBooths,
   saveImportMeta, getImportMeta,
-  clearBooths, deleteImportMeta,
+  deleteImportMeta,
 } from '../firebase/voterService'
 import {
   cacheVoters, loadCachedVoters,
@@ -143,52 +143,24 @@ export default function Voters() {
         }
       })
     } else {
-      // No local meta — check Firestore first, then fall back to Storage directly
+      // No local meta — check Firestore (first load / different device)
       getImportMeta()
-        .then(async meta => {
-          const firestoreMeta = meta || {}
-          cacheImportMeta({ ...firestoreMeta, csvHeaders: DEFAULT_HEADERS })
-          setImportMeta(firestoreMeta)
+        .then(meta => {
+          if (!meta?.storageUrl) return
+          cacheImportMeta({ ...meta, csvHeaders: DEFAULT_HEADERS })
+          setImportMeta(meta)
           setHasFile(true)
           setLoadStatus('loading')
-          // Use SDK getBlob (no CORS) — works whether or not Firestore meta exists
-          let text
-          if (meta?.storageUrl) {
-            text = await downloadVoterCSV(meta.storageUrl).catch(() => null)
-          }
-          if (!text) {
-            try { text = await downloadVoterCSVFromStorage() } catch { setLoadStatus('idle'); return }
-          }
-          const { headers, voters: parsed } = parseCSV(text)
-          const { boothCol, stationCol } = detectCols(headers, parsed.slice(0, 50))
-          setVoters(parsed)
-          setCsvHeaders(headers)
-          setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
-          cacheVoters(parsed)
-          // Rebuild Firestore meta + booths if they were wiped
-          const now = new Date()
-          const boothSet   = new Set(parsed.map(v => v[boothCol]).filter(Boolean))
-          const stationSet = new Set(parsed.map(v => v[stationCol]).filter(Boolean))
-          const resolvedUrl = meta?.storageUrl || await import('../firebase/voterService').then(m => m.getVoterCSVDownloadURL()).catch(() => '')
-          const recoveredMeta = {
-            ...firestoreMeta,
-            storageUrl: resolvedUrl,
-            csvHeaders: headers,
-            boothCol,
-            stationCol,
-            records:  firestoreMeta.records  ?? parsed.length,
-            booths:   firestoreMeta.booths   ?? boothSet.size,
-            stations: firestoreMeta.stations ?? stationSet.size,
-            importedOn: firestoreMeta.importedOn ?? now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-          }
-          cacheImportMeta(recoveredMeta)
-          setImportMeta(recoveredMeta)
-          // Restore Firestore collections if they were cleared
-          if (!meta) {
-            saveImportMeta(recoveredMeta).catch(() => {})
-            uploadBooths(parsed, boothCol, stationCol).catch(() => {})
-          }
-          setLoadStatus('ready')
+          return downloadVoterCSV(meta.storageUrl)
+            .then(text => {
+              const { headers, voters: parsed } = parseCSV(text)
+              setVoters(parsed)
+              setCsvHeaders(headers)
+              setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
+              cacheVoters(parsed)
+              cacheImportMeta({ ...meta, csvHeaders: headers })
+              setLoadStatus('ready')
+            })
         })
         .catch(() => {})
     }
@@ -300,10 +272,8 @@ export default function Voters() {
   const handleClearAll = async () => {
     setClearing(true)
     try {
-      // Clear local caches first (instant)
       await clearVoterCache()
-      // Clear Firestore data in background (best effort)
-      await Promise.allSettled([clearBooths(), deleteImportMeta()])
+      await deleteImportMeta()
     } finally {
       // Reset all UI state regardless of Firestore outcome
       setVoters([])
@@ -625,7 +595,7 @@ export default function Voters() {
             </div>
             <p className="text-slate-800 font-bold text-[17px] mb-1">Delete all voter data?</p>
             <p className="text-slate-500 text-[13px] leading-relaxed mb-1">
-              This will permanently remove <strong>{voters.length.toLocaleString()} voters</strong>, all booth data, and the cloud backup.
+              This will permanently remove <strong>{voters.length.toLocaleString()} voters</strong> and the cloud backup. Booth data will be preserved.
             </p>
             <p className="text-slate-400 text-[12px] mb-6">You will need to re-import a CSV to restore the data.</p>
             <div className="flex gap-3 w-full">
