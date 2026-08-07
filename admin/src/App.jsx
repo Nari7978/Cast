@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import Booths from './pages/Booths'
 import BoothAgents from './pages/BoothAgents'
 import Voters from './pages/Voters'
+import Phases from './pages/Phases'
 import Surveys from './pages/Surveys'
 import AssignSurveys from './pages/AssignSurveys'
 import Responses from './pages/Responses'
@@ -21,22 +22,15 @@ function ProtectedRoute({ children }) {
 
 function AppRoutes() {
   const { user } = useAuth()
-
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
+      <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
         <Route path="booths" element={<Booths />} />
         <Route path="booth-agents" element={<BoothAgents />} />
         <Route path="voters" element={<Voters />} />
+        <Route path="phases" element={<Phases />} />
         <Route path="surveys" element={<Surveys />} />
         <Route path="assign-surveys" element={<AssignSurveys />} />
         <Route path="responses" element={<Responses />} />
