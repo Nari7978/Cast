@@ -9,25 +9,13 @@ import {
 import { subscribePhases } from '../firebase/phaseService'
 import { subscribeSurveyForms } from '../firebase/surveyService'
 import { subscribeAssignments, createAssignment, deleteAssignment as deleteAssignmentSvc } from '../firebase/assignmentService'
+import { fetchAllBooths } from '../firebase/voterService'
+import { subscribeAgents } from '../firebase/agentService'
 
-// ─── Static booth selection data (populated from voters upload) ───────────────
-
-const POLLING_STATIONS = [
-  { id: 'PS1', name: 'Rishikesh',      boothCount: 18 },
-  { id: 'PS2', name: 'Haridwar',       boothCount: 22 },
-  { id: 'PS3', name: 'Dehradun North', boothCount: 16 },
-  { id: 'PS4', name: 'Dehradun South', boothCount: 14 },
-  { id: 'PS5', name: 'Roorkee',        boothCount: 20 },
-]
-
-// 30 mock selectable booths for the create wizard
-const MOCK_BOOTHS = [
-  ...Array.from({ length: 6 }, (_, i) => ({ id: i+1,  no: String(i+1).padStart(3,'0'),  name: `Booth ${String(i+1).padStart(3,'0')}`,  station: 'Rishikesh',      stationId: 'PS1', agent: `Agent ${String(i+1).padStart(2,'0')}` })),
-  ...Array.from({ length: 8 }, (_, i) => ({ id: i+7,  no: String(i+7).padStart(3,'0'),  name: `Booth ${String(i+7).padStart(3,'0')}`,  station: 'Haridwar',       stationId: 'PS2', agent: `Agent ${String(i+7).padStart(2,'0')}` })),
-  ...Array.from({ length: 6 }, (_, i) => ({ id: i+15, no: String(i+15).padStart(3,'0'), name: `Booth ${String(i+15).padStart(3,'0')}`, station: 'Dehradun North', stationId: 'PS3', agent: `Agent ${String(i+15).padStart(2,'0')}` })),
-  ...Array.from({ length: 5 }, (_, i) => ({ id: i+21, no: String(i+21).padStart(3,'0'), name: `Booth ${String(i+21).padStart(3,'0')}`, station: 'Dehradun South', stationId: 'PS4', agent: `Agent ${String(i+21).padStart(2,'0')}` })),
-  ...Array.from({ length: 5 }, (_, i) => ({ id: i+26, no: String(i+26).padStart(3,'0'), name: `Booth ${String(i+26).padStart(3,'0')}`, station: 'Roorkee',        stationId: 'PS5', agent: `Agent ${String(i+26).padStart(2,'0')}` })),
-]
+const BOOTHS_CACHE_KEY = 'cast_booths_cache'
+function readBoothsCache() {
+  try { const v = localStorage.getItem(BOOTHS_CACHE_KEY); return v ? JSON.parse(v) : [] } catch { return [] }
+}
 
 
 const STATUS_CFG = {
@@ -77,7 +65,7 @@ function StepBar({ step }) {
 
 // ─── Create Assignment Wizard ─────────────────────────────────────────────────
 
-function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms }) {
+function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, booths, stations }) {
   const [step, setStep]   = useState(1)
   const [phaseId, setPId] = useState(defaultPhaseId || '')
   const [formId, setFId]  = useState('')
@@ -93,11 +81,11 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms }) 
   const selectedForm  = surveyForms.find(f => f.id === formId)
 
   const filteredBooths = useMemo(() => {
-    let b = MOCK_BOOTHS
+    let b = booths
     if (bStation) b = b.filter(x => x.stationId === bStation)
     if (bSearch)  b = b.filter(x => x.name.toLowerCase().includes(bSearch.toLowerCase()) || x.station.toLowerCase().includes(bSearch.toLowerCase()) || x.agent.toLowerCase().includes(bSearch.toLowerCase()))
     return b
-  }, [bStation, bSearch])
+  }, [booths, bStation, bSearch])
 
   function toggleBooth(id) { setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
   function selectAll()   { setSel(new Set(filteredBooths.map(b => b.id))) }
@@ -105,10 +93,10 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms }) 
   function applyRange() {
     const from = parseInt(rangeFrom, 10), to = parseInt(rangeTo, 10)
     if (!from || !to || from > to) return
-    const ids = MOCK_BOOTHS.filter(b => parseInt(b.no, 10) >= from && parseInt(b.no, 10) <= to).map(b => b.id)
+    const ids = booths.filter(b => parseInt(b.no, 10) >= from && parseInt(b.no, 10) <= to).map(b => b.id)
     setSel(prev => { const n = new Set(prev); ids.forEach(id => n.add(id)); return n })
   }
-  function selectByStation(sid) { const ids = MOCK_BOOTHS.filter(b => b.stationId === sid).map(b => b.id); setSel(new Set(ids)) }
+  function selectByStation(sid) { const ids = booths.filter(b => b.stationId === sid).map(b => b.id); setSel(new Set(ids)) }
 
   function validateStep1() {
     const e = {}
@@ -222,7 +210,7 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms }) 
                 <div className="relative">
                   <select value={bStation} onChange={e => setBStn(e.target.value)} className="appearance-none pl-3 pr-7 py-2 rounded-xl border border-[#E8ECF4] text-[12px] text-slate-600 outline-none cursor-pointer bg-white" style={{ minWidth: 140 }}>
                     <option value="">All Stations</option>
-                    {POLLING_STATIONS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {stations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                   <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
@@ -240,7 +228,7 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms }) 
               {/* Select by station buttons */}
               <div className="flex gap-1.5 mb-3 flex-wrap">
                 <span className="text-[11px] text-slate-400 self-center">By station:</span>
-                {POLLING_STATIONS.map(s => (
+                {stations.map(s => (
                   <button key={s.id} onClick={() => selectByStation(s.id)} className="px-2.5 py-1 rounded-lg text-[11px] font-medium border border-[#E8ECF4] text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-colors">{s.name}</button>
                 ))}
               </div>
@@ -328,6 +316,8 @@ export default function AssignSurveys() {
   const [phases, setPhases]             = useState([])
   const [surveyForms, setSurveyForms]   = useState([])
   const [assignments, setAssignments]   = useState([])
+  const [booths, setBooths]             = useState(() => readBoothsCache())
+  const [agents, setAgents]             = useState([])
   const [selectedPhaseId, setPhaseId]   = useState('')
   const [search, setSearch]             = useState('')
   const [filterForm, setFilterForm]     = useState('')
@@ -347,6 +337,18 @@ export default function AssignSurveys() {
     data => { setAssignments(data); if (drawer) setDrawer(data.find(a => a.id === drawer.id) || null) },
     err  => console.error('[AssignSurveys] assignments error:', err)
   ), [])
+  useEffect(() => subscribeAgents(
+    data => setAgents(data),
+    err  => console.error('[AssignSurveys] agents error:', err)
+  ), [])
+  useEffect(() => {
+    if (booths.length === 0) {
+      fetchAllBooths().then(data => {
+        setBooths(data)
+        try { localStorage.setItem(BOOTHS_CACHE_KEY, JSON.stringify(data)) } catch {}
+      })
+    }
+  }, [])
 
   const selectedPhase = phases.find(p => p.id === selectedPhaseId)
   const phaseStatusCfg = PHASE_STATUS_CFG[selectedPhase?.status] || PHASE_STATUS_CFG.Upcoming
@@ -367,6 +369,32 @@ export default function AssignSurveys() {
   const totalBooths = phaseAssignments.reduce((s, a) => s + (a.boothCount || 0), 0)
   const uniqueForms = [...new Set(phaseAssignments.map(a => a.formId))].length
   const coveragePct = selectedPhase?.booths > 0 ? Math.min(100, Math.round(totalBooths / selectedPhase.booths * 100)) : 0
+
+  // Build wizard-ready booth list from real Firestore data
+  const agentByBooth = useMemo(() => {
+    const map = {}
+    agents.forEach(a => { if (a.boothId) map[String(a.boothId)] = a })
+    return map
+  }, [agents])
+
+  const wizardBooths = useMemo(() => booths.map(b => ({
+    id:        b.boothNo,
+    no:        String(b.boothNo).padStart(3, '0'),
+    name:      `Booth ${b.boothNo}`,
+    station:   b.pollingStation || '',
+    stationId: b.pollingStation || '',
+    agent:     agentByBooth[String(b.boothNo)]?.name || 'Unassigned',
+  })), [booths, agentByBooth])
+
+  const wizardStations = useMemo(() => {
+    const map = {}
+    booths.forEach(b => {
+      if (!b.pollingStation) return
+      if (!map[b.pollingStation]) map[b.pollingStation] = { id: b.pollingStation, name: b.pollingStation, boothCount: 0 }
+      map[b.pollingStation].boothCount++
+    })
+    return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
+  }, [booths])
 
   async function saveAssignment(a) { await createAssignment(a) }
   async function handleDelete(id) { await deleteAssignmentSvc(id); if (drawer?.id === id) setDrawer(null) }
@@ -667,7 +695,7 @@ export default function AssignSurveys() {
       })()}
 
       {/* ─── Create Wizard ─── */}
-      {showCreate && <CreateWizard defaultPhaseId={selectedPhaseId} onClose={() => setShowCreate(false)} onSave={saveAssignment} phases={phases} surveyForms={surveyForms} />}
+      {showCreate && <CreateWizard defaultPhaseId={selectedPhaseId} onClose={() => setShowCreate(false)} onSave={saveAssignment} phases={phases} surveyForms={surveyForms} booths={wizardBooths} stations={wizardStations} />}
     </div>
   )
 }
