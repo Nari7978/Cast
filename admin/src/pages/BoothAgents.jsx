@@ -291,7 +291,7 @@ function AgentForm({ editingAgent, agents, booths, onClose, onSave }) {
                 <option value="">Select booth...</option>
                 {booths.map(b => (
                   <option key={b.boothNo} value={b.boothNo}>
-                    Booth {b.boothNo}{isBoothTaken(b.boothNo) ? ' (Occupied)' : ''}
+                    Booth {b.boothNo}{b.pollingStation ? ` – ${b.pollingStation}` : ''}{isBoothTaken(b.boothNo) ? ' (Occupied)' : ''}
                   </option>
                 ))}
               </select>
