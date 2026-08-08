@@ -6,60 +6,11 @@ import {
   Copy, Check, KeyRound,
 } from 'lucide-react'
 
-// ── Mock Data ──────────────────────────────────────────────────────────────────
-
-const STATIONS = [
-  { id: 1, name: 'Atal Utkrisht Rajkiya Inter College'  },
-  { id: 2, name: 'Govt. Primary School Muni Ki Reti'    },
-  { id: 3, name: 'Saraswati Vidya Mandir'               },
-  { id: 4, name: 'Rajkiya Inter College Rishikesh'      },
-  { id: 5, name: 'Government Girls Inter College'       },
-  { id: 6, name: 'Primary School Lakshman Jhula'        },
-  { id: 7, name: 'Nehru Smarak Vidyalaya'               },
-  { id: 8, name: 'Municipal Corporation School'         },
-]
-
-const BOOTHS_LIST = [
-  { id: 1,  no: 1,  name: 'Chidderwala Part-1',    stationId: 1 },
-  { id: 2,  no: 2,  name: 'Chidderwala Part-2',    stationId: 1 },
-  { id: 3,  no: 3,  name: 'Chidderwala Part-3',    stationId: 1 },
-  { id: 4,  no: 4,  name: 'Chidderwala Part-4',    stationId: 1 },
-  { id: 5,  no: 5,  name: 'Muni Ki Reti Part-1',   stationId: 2 },
-  { id: 6,  no: 6,  name: 'Muni Ki Reti Part-2',   stationId: 2 },
-  { id: 7,  no: 7,  name: 'Muni Ki Reti Part-3',   stationId: 2 },
-  { id: 8,  no: 8,  name: 'Muni Ki Reti Part-4',   stationId: 2 },
-  { id: 9,  no: 9,  name: 'Muni Ki Reti Part-5',   stationId: 2 },
-  { id: 10, no: 10, name: 'Tapovan Area Part-1',   stationId: 3 },
-  { id: 11, no: 11, name: 'Tapovan Area Part-2',   stationId: 3 },
-  { id: 12, no: 12, name: 'Tapovan Area Part-3',   stationId: 3 },
-  { id: 13, no: 13, name: 'Tapovan Area Part-4',   stationId: 3 },
-  { id: 14, no: 14, name: 'Rishikesh Main Part-1', stationId: 4 },
-  { id: 15, no: 15, name: 'Rishikesh Main Part-2', stationId: 4 },
-  { id: 16, no: 16, name: 'Rishikesh Main Part-3', stationId: 4 },
-  { id: 17, no: 17, name: 'Rishikesh Main Part-4', stationId: 4 },
-  { id: 18, no: 18, name: 'Rishikesh Main Part-5', stationId: 4 },
-  { id: 19, no: 19, name: 'Rishikesh Main Part-6', stationId: 4 },
-  { id: 20, no: 20, name: 'Haridwar Road Part-1',  stationId: 5 },
-  { id: 21, no: 21, name: 'Haridwar Road Part-2',  stationId: 5 },
-  { id: 22, no: 22, name: 'Haridwar Road Part-3',  stationId: 5 },
-  { id: 23, no: 23, name: 'Lakshman Jhula Part-1', stationId: 6 },
-  { id: 24, no: 24, name: 'Lakshman Jhula Part-2', stationId: 6 },
-  { id: 25, no: 25, name: 'Lakshman Jhula Part-3', stationId: 6 },
-  { id: 26, no: 26, name: 'Lakshman Jhula Part-4', stationId: 6 },
-  { id: 27, no: 27, name: 'Dehradun Road Part-1',  stationId: 7 },
-  { id: 28, no: 28, name: 'Dehradun Road Part-2',  stationId: 7 },
-  { id: 29, no: 29, name: 'Dehradun Road Part-3',  stationId: 7 },
-  { id: 30, no: 30, name: 'Dehradun Road Part-4',  stationId: 7 },
-  { id: 31, no: 31, name: 'Dehradun Road Part-5',  stationId: 7 },
-  { id: 32, no: 32, name: 'City Centre Part-1',    stationId: 8 },
-  { id: 33, no: 33, name: 'City Centre Part-2',    stationId: 8 },
-  { id: 34, no: 34, name: 'City Centre Part-3',    stationId: 8 },
-]
-
 import { subscribeAgents, createAgent, updateAgent, deleteAgent as deleteAgentSvc } from '../firebase/agentService'
+import { fetchAllBooths } from '../firebase/voterService'
 
 const generatePIN = () => String(Math.floor(1000 + Math.random() * 9000))
-const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', phase: 'Phase 2', stationId: '', boothId: '', status: 'Active', notes: '', pin: generatePIN() }
+const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', phase: 'Phase 2', boothNo: '', status: 'Active', notes: '', pin: generatePIN() }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -201,7 +152,7 @@ function AgentDrawer({ agent, onClose, onEdit }) {
           <div className="bg-slate-50 rounded-2xl p-4">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-3">Assignment</p>
             <div className="space-y-0">
-              <Field label="Booth"           value={`Booth ${agent.boothNo} – ${agent.boothName}`} />
+              <Field label="Booth"           value={`Booth ${agent.boothNo}`} />
               <Field label="Polling Station" value={agent.station} />
               <Field label="Phase"           value={agent.phase}   />
             </div>
@@ -236,36 +187,33 @@ function AgentDrawer({ agent, onClose, onEdit }) {
 
 // ── Agent Form Modal ──────────────────────────────────────────────────────────
 
-function AgentForm({ editingAgent, agents, onClose, onSave }) {
+function AgentForm({ editingAgent, agents, booths, onClose, onSave }) {
   const [form, setForm] = useState(editingAgent
     ? { name: editingAgent.name, mobile: editingAgent.mobile, email: editingAgent.email,
-        gender: editingAgent.gender, phase: editingAgent.phase, stationId: String(editingAgent.stationId),
-        boothId: String(editingAgent.boothId), status: editingAgent.status, notes: editingAgent.notes,
+        gender: editingAgent.gender, phase: editingAgent.phase,
+        boothNo: editingAgent.boothNo || '',
+        status: editingAgent.status, notes: editingAgent.notes || '',
         pin: editingAgent.pin || generatePIN() }
     : { ...EMPTY_FORM, pin: generatePIN() })
   const [errors, setErrors] = useState({})
 
-  const selectedBooth   = BOOTHS_LIST.find(b => b.id === Number(form.boothId))
-  const selectedStation = selectedBooth ? STATIONS.find(s => s.id === selectedBooth.stationId) : null
+  const selectedBooth = booths.find(b => b.boothNo === form.boothNo)
 
-  const isBoothTaken = (boothId) =>
-    agents.some(a => a.boothId === Number(boothId) && a.status === 'Active' && a.id !== editingAgent?.id)
+  const isBoothTaken = (boothNo) =>
+    agents.some(a => a.boothNo === boothNo && a.status === 'Active' && a.id !== editingAgent?.id)
 
-  const takenBooth = form.boothId && form.status === 'Active' && isBoothTaken(form.boothId)
+  const takenBooth = form.boothNo && form.status === 'Active' && isBoothTaken(form.boothNo)
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
 
-  const selectBooth = (boothId) => {
-    const booth = BOOTHS_LIST.find(b => b.id === Number(boothId))
-    setForm(f => ({ ...f, boothId, stationId: booth ? String(booth.stationId) : '' }))
-  }
+  const selectBooth = (boothNo) => setForm(f => ({ ...f, boothNo }))
 
   const validate = () => {
     const e = {}
     if (!form.name.trim())   e.name   = 'Full name is required'
     if (!form.mobile.trim()) e.mobile = 'Mobile number is required'
     if (!/^\d{10}$/.test(form.mobile.trim())) e.mobile = 'Enter a valid 10-digit mobile number'
-    if (!form.boothId)       e.booth  = 'Select a booth'
+    if (!form.boothNo)       e.booth  = 'Select a booth'
     if (takenBooth)          e.booth  = 'This booth already has an assigned active agent'
     setErrors(e)
     return Object.keys(e).length === 0
@@ -275,11 +223,8 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
     if (!validate()) return
     const data = {
       ...form,
-      stationId: selectedBooth?.stationId || '',
-      boothId:   Number(form.boothId),
-      boothNo:   selectedBooth?.no,
-      boothName: selectedBooth?.name,
-      station:   selectedStation?.name,
+      boothNo: form.boothNo,
+      station: selectedBooth?.pollingStation || '',
     }
     onSave(editingAgent ? { id: editingAgent.id, ...data } : data)
   }
@@ -342,11 +287,11 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
             {/* Booth (select first → Polling Station auto-fills) */}
             <div>
               <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Booth <span className="text-red-400">*</span></label>
-              <select value={form.boothId} onChange={e => selectBooth(e.target.value)} className={inputCls(errors.booth)}>
+              <select value={form.boothNo} onChange={e => selectBooth(e.target.value)} className={inputCls(errors.booth)}>
                 <option value="">Select booth...</option>
-                {BOOTHS_LIST.map(b => (
-                  <option key={b.id} value={b.id}>
-                    Booth {b.no} – {b.name}{isBoothTaken(b.id) ? ' (Occupied)' : ''}
+                {booths.map(b => (
+                  <option key={b.boothNo} value={b.boothNo}>
+                    Booth {b.boothNo}{isBoothTaken(b.boothNo) ? ' (Occupied)' : ''}
                   </option>
                 ))}
               </select>
@@ -362,9 +307,9 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
             {/* Polling Station (auto-filled from booth selection) */}
             <div>
               <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Polling Station</label>
-              <div className={`flex items-center gap-2 w-full px-3 py-2.5 rounded-xl border text-[13px] ${selectedStation ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-                <MapPin size={13} className={selectedStation ? 'text-indigo-400' : 'text-slate-300'} />
-                <span>{selectedStation ? selectedStation.name : 'Auto-filled when you select a booth'}</span>
+              <div className={`flex items-center gap-2 w-full px-3 py-2.5 rounded-xl border text-[13px] ${selectedBooth ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                <MapPin size={13} className={selectedBooth ? 'text-indigo-400' : 'text-slate-300'} />
+                <span>{selectedBooth ? selectedBooth.pollingStation : 'Auto-filled when you select a booth'}</span>
               </div>
             </div>
 
@@ -426,6 +371,7 @@ const PAGE_SIZE = 10
 
 export default function BoothAgents() {
   const [agents,        setAgents]        = useState([])
+  const [booths,        setBooths]        = useState([])
   const [search,        setSearch]        = useState('')
   const [stationFilter, setStationFilter] = useState('All')
   const [statusFilter,  setStatusFilter]  = useState('All')
@@ -438,6 +384,14 @@ export default function BoothAgents() {
     setAgents(data)
     setDrawerAgent(prev => prev ? data.find(a => a.id === prev.id) || null : null)
   }), [])
+
+  useEffect(() => {
+    fetchAllBooths().then(setBooths).catch(() => {})
+  }, [])
+
+  const uniqueStations = useMemo(() =>
+    ['All', ...[...new Set(booths.map(b => b.pollingStation).filter(Boolean))].sort()],
+  [booths])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -519,8 +473,7 @@ export default function BoothAgents() {
           {/* Polling Station filter */}
           <select value={stationFilter} onChange={e => { setStationFilter(e.target.value); setPage(1) }}
             className="px-3 py-2 bg-white border border-[#E8ECF4] rounded-xl text-[12px] text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#5B5CEB]/20">
-            <option value="All">All Polling Stations</option>
-            {STATIONS.map(s => <option key={s.id}>{s.name}</option>)}
+            {uniqueStations.map(s => <option key={s} value={s}>{s === 'All' ? 'All Polling Stations' : s}</option>)}
           </select>
 
           {/* Phase filter */}
@@ -692,7 +645,7 @@ export default function BoothAgents() {
 
       {/* ── Form Modal ──────────────────────────────────────────────────────── */}
       {showForm && (
-        <AgentForm editingAgent={editingAgent} agents={agents} onClose={() => setShowForm(false)} onSave={handleSave} />
+        <AgentForm editingAgent={editingAgent} agents={agents} booths={booths} onClose={() => setShowForm(false)} onSave={handleSave} />
       )}
     </div>
   )
