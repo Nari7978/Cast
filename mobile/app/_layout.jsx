@@ -26,7 +26,8 @@ function AuthGuard() {
   useEffect(() => {
     if (isAuthenticated) {
       startSyncListener()
-      const { agent, setVoters, setActiveSurvey, setActivePhase } = useStore.getState()
+      const { agent, setVoters, setActiveSurvey, setActivePhase, loadPending } = useStore.getState()
+      loadPending()
       if (agent?.boothNo) {
         fetchVotersForBooth(agent.boothNo).then(setVoters).catch(() => {})
         fetchActiveSurveyData(agent.boothNo)

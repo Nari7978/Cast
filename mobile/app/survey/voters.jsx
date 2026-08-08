@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, memo } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, Pressable,
@@ -17,7 +17,7 @@ const STATUS_CFG = {
 
 const FILTERS = ['All', 'Pending', 'In Progress', 'Done']
 
-function VoterRow({ voter, status, onPress }) {
+const VoterRow = memo(function VoterRow({ voter, status, onPress }) {
   const cfg     = STATUS_CFG[status] || STATUS_CFG.not_started
   const initials = (voter.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 
@@ -42,12 +42,23 @@ function VoterRow({ voter, status, onPress }) {
       </View>
     </TouchableOpacity>
   )
+})
+
+function getStatus(responses, voterId) {
+  const r = responses[voterId]
+  if (!r) return 'not_started'
+  if (r.submittedAt) return 'completed'
+  return 'in_progress'
 }
 
 export default function SurveyVotersScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { voters, activeSurvey, activePhase, agent, getResponseStatus } = useStore()
+  const voters      = useStore(s => s.voters)
+  const responses   = useStore(s => s.responses)
+  const activeSurvey = useStore(s => s.activeSurvey)
+  const activePhase  = useStore(s => s.activePhase)
+  const agent        = useStore(s => s.agent)
 
   const [search,       setSearch]       = useState('')
   const [activeFilter, setActiveFilter] = useState('All')
@@ -55,7 +66,7 @@ export default function SurveyVotersScreen() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return voters.filter(v => {
-      const status = getResponseStatus(v.id)
+      const status = getStatus(responses, v.id)
       const matchQ = !q
         || (v.name || '').toLowerCase().includes(q)
         || (v.voterId || v.voter_id || '').toLowerCase().includes(q)
@@ -68,14 +79,21 @@ export default function SurveyVotersScreen() {
         activeFilter === 'Pending'     ? status === 'not_started' : true
       return matchQ && matchF
     })
-  }, [voters, search, activeFilter, getResponseStatus])
+  }, [voters, search, activeFilter, responses])
 
-  const counts = useMemo(() => ({
-    total:       voters.length,
-    completed:   voters.filter(v => getResponseStatus(v.id) === 'completed').length,
-    in_progress: voters.filter(v => getResponseStatus(v.id) === 'in_progress').length,
-    not_started: voters.filter(v => getResponseStatus(v.id) === 'not_started').length,
-  }), [voters, getResponseStatus])
+  const counts = useMemo(() => {
+    const completed   = voters.filter(v => getStatus(responses, v.id) === 'completed').length
+    const in_progress = voters.filter(v => getStatus(responses, v.id) === 'in_progress').length
+    return { total: voters.length, completed, in_progress, not_started: voters.length - completed - in_progress }
+  }, [voters, responses])
+
+  const renderItem = useCallback(({ item }) => (
+    <VoterRow
+      voter={item}
+      status={getStatus(responses, item.id)}
+      onPress={() => router.push(`/survey/${item.id}`)}
+    />
+  ), [responses, router])
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -125,21 +143,21 @@ export default function SurveyVotersScreen() {
       <FlatList
         data={filtered}
         keyExtractor={item => item.id}
+        renderItem={renderItem}
         contentContainerStyle={{ padding: 14, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={15}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews
+        keyboardShouldPersistTaps="handled"
+        overScrollMode="never"
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="people-outline" size={48} color={theme.border} />
             <Text style={styles.emptyText}>No voters found</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <VoterRow
-            voter={item}
-            status={getResponseStatus(item.id)}
-            onPress={() => router.push(`/survey/${item.id}`)}
-          />
-        )}
       />
     </View>
   )

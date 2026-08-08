@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, memo } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, Pressable,
@@ -9,14 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
 
-const STATUS_CFG = {
-  completed:   { label: 'Completed',   color: theme.success,  bg: theme.successLight },
-  in_progress: { label: 'In Progress', color: theme.warning,  bg: theme.warningLight },
-  not_started: { label: 'Not Started', color: theme.textMuted, bg: '#F1F5F9' },
-}
-
-function VoterCard({ voter, status, onPress }) {
-  const cfg     = STATUS_CFG[status] || STATUS_CFG.not_started
+const VoterCard = memo(function VoterCard({ voter, onPress }) {
   const initials = (voter.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 
   return (
@@ -25,12 +18,7 @@ function VoterCard({ voter, status, onPress }) {
         <Text style={styles.avatarText}>{initials}</Text>
       </View>
       <View style={styles.cardInfo}>
-        <View style={styles.cardTopRow}>
-          <Text style={styles.voterName}>{voter.name || '—'}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-            <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
-          </View>
-        </View>
+        <Text style={styles.voterName}>{voter.name || '—'}</Text>
         <View style={styles.cardMeta}>
           <MetaChip icon="card-outline"   text={voter.voterId  || voter.voter_id || '—'} />
           <MetaChip icon="person-outline" text={`${voter.age || '—'} · ${voter.gender || '—'}`} />
@@ -40,7 +28,7 @@ function VoterCard({ voter, status, onPress }) {
       <Ionicons name="chevron-forward" size={16} color={theme.border} />
     </TouchableOpacity>
   )
-}
+})
 
 function MetaChip({ icon, text }) {
   return (
@@ -51,32 +39,30 @@ function MetaChip({ icon, text }) {
   )
 }
 
-const FILTERS = ['All', 'Not Started', 'In Progress', 'Completed']
-
 export default function VotersScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { voters, getResponseStatus } = useStore()
+  const voters = useStore(s => s.voters)
 
-  const [search,      setSearch]      = useState('')
-  const [activeFilter, setActiveFilter] = useState('All')
+  const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => {
+    if (!search) return voters
     const q = search.toLowerCase()
-    return voters.filter(v => {
-      const status   = getResponseStatus(v.id)
-      const matchQ   = !q || (v.name || '').toLowerCase().includes(q)
-        || (v.voterId || v.voter_id || '').toLowerCase().includes(q)
-        || (v.houseNo || v.house_no || '').toLowerCase().includes(q)
-        || (v.mobile  || '').includes(q)
-      const matchF =
-        activeFilter === 'All'         ? true :
-        activeFilter === 'Completed'   ? status === 'completed'   :
-        activeFilter === 'In Progress' ? status === 'in_progress' :
-        activeFilter === 'Not Started' ? status === 'not_started' : true
-      return matchQ && matchF
-    })
-  }, [voters, search, activeFilter, getResponseStatus])
+    return voters.filter(v =>
+      (v.name || '').toLowerCase().includes(q)
+      || (v.voterId || v.voter_id || '').toLowerCase().includes(q)
+      || (v.houseNo || v.house_no || '').toLowerCase().includes(q)
+      || (v.mobile  || '').includes(q)
+    )
+  }, [voters, search])
+
+  const renderItem = useCallback(({ item }) => (
+    <VoterCard
+      voter={item}
+      onPress={() => router.push(`/survey/${item.id}`)}
+    />
+  ), [router])
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -94,6 +80,8 @@ export default function VotersScreen() {
             onChangeText={setSearch}
             placeholder="Search by name, voter ID, house no..."
             placeholderTextColor={theme.textMuted}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
           />
           {!!search && (
             <Pressable onPress={() => setSearch('')}>
@@ -101,39 +89,26 @@ export default function VotersScreen() {
             </Pressable>
           )}
         </View>
-
-        {/* Filter tabs */}
-        <View style={styles.filterRow}>
-          {FILTERS.map(f => (
-            <TouchableOpacity
-              key={f}
-              style={[styles.filterTab, activeFilter === f && styles.filterTabActive]}
-              onPress={() => setActiveFilter(f)}
-            >
-              <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{f}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </View>
 
       <FlatList
         data={filtered}
         keyExtractor={item => item.id}
+        renderItem={renderItem}
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={15}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews
+        keyboardShouldPersistTaps="handled"
+        overScrollMode="never"
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="people-outline" size={48} color={theme.border} />
             <Text style={styles.emptyText}>No voters found</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <VoterCard
-            voter={item}
-            status={getResponseStatus(item.id)}
-            onPress={() => router.push(`/survey/${item.id}`)}
-          />
-        )}
       />
     </View>
   )

@@ -5,6 +5,13 @@ import { useStore } from '../store/useStore'
 let unsubscribe = null
 let syncing = false
 
+// ── Survey data cache (5 min TTL) ─────────────────────────────────────────────
+let _surveyCache = null
+let _surveyCacheAt = 0
+const SURVEY_TTL = 5 * 60 * 1000
+
+export function invalidateSurveyCache() { _surveyCacheAt = 0 }
+
 export function startSyncListener() {
   if (unsubscribe) return
   unsubscribe = NetInfo.addEventListener(state => {
@@ -39,6 +46,10 @@ async function syncPending() {
 }
 
 export async function fetchActiveSurveyData(boothNo) {
+  if (_surveyCache && Date.now() - _surveyCacheAt < SURVEY_TTL) {
+    return _surveyCache
+  }
+
   const [surveysRes, phasesRes] = await Promise.all([
     supabase.from('surveys').select('*').order('inserted_at', { ascending: false }),
     supabase.from('phases').select('*').order('inserted_at', { ascending: false }),
@@ -52,7 +63,9 @@ export async function fetchActiveSurveyData(boothNo) {
     ? surveys.find(s => s.id === activePhase.surveyId) || surveys[0] || null
     : surveys[0] || null
 
-  return { activeSurvey, activePhase, phases, surveys }
+  _surveyCache = { activeSurvey, activePhase, phases, surveys }
+  _surveyCacheAt = Date.now()
+  return _surveyCache
 }
 
 export async function fetchVotersForBooth(boothNo) {

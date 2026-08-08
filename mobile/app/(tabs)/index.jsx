@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, ActivityIndicator,
@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
-import { fetchActiveSurveyData, fetchVotersForBooth } from '../../src/services/sync'
+import { fetchActiveSurveyData, fetchVotersForBooth, invalidateSurveyCache } from '../../src/services/sync'
 
 function KPICard({ label, value, color, bg, icon }) {
   return (
@@ -34,14 +34,15 @@ function DemoCard({ label, value, color }) {
 export default function HomeScreen() {
   const insets  = useSafeAreaInsets()
   const router  = useRouter()
-  const { agent, activeSurvey, activePhase, voters, setActiveSurvey, setActivePhase, setVoters, responses, loadPending } = useStore()
+  const { agent, activeSurvey, activePhase, voters, setActiveSurvey, setActivePhase, setVoters, responses, dataLoadedAt } = useStore()
 
-  const [loading,    setLoading]    = useState(true)
+  const hasData = dataLoadedAt > 0 || voters.length > 0
+  const [loading,    setLoading]    = useState(!hasData)
   const [refreshing, setRefreshing] = useState(false)
 
-  const load = async (silent = false) => {
-    if (!silent) setLoading(true)
+  const load = useCallback(async (force = false) => {
     try {
+      if (force) invalidateSurveyCache()
       const { activeSurvey: s, activePhase: p } = await fetchActiveSurveyData(agent?.boothNo)
       setActiveSurvey(s)
       setActivePhase(p)
@@ -49,13 +50,16 @@ export default function HomeScreen() {
         const v = await fetchVotersForBooth(agent.boothNo)
         setVoters(v)
       }
-      await loadPending()
     } catch (_) {}
     setLoading(false)
     setRefreshing(false)
-  }
+  }, [agent?.boothNo])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    // If we have stale data show it immediately, refresh silently in background
+    if (hasData) load(false)
+    else load(false)
+  }, [])
 
   const total     = voters.length
   const completed = voters.filter(v => responses[v.id]?.submittedAt).length
@@ -89,6 +93,7 @@ export default function HomeScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true) }} tintColor={theme.primary} />}
+      overScrollMode="never"
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}

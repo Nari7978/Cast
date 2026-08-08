@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, ActivityIndicator,
@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
-import { fetchActiveSurveyData } from '../../src/services/sync'
+import { fetchActiveSurveyData, invalidateSurveyCache } from '../../src/services/sync'
 
 const STATUS_CFG = {
   Active:    { color: theme.success,  bg: theme.successLight,  icon: 'play-circle',         label: 'Active'    },
@@ -88,23 +88,23 @@ export default function TasksScreen() {
   const { agent, activeSurvey, activePhase, setActiveSurvey, setActivePhase } = useStore()
   const [phases,     setPhases]     = useState([])
   const [surveys,    setSurveys]    = useState([])
-  const [loading,    setLoading]    = useState(true)
+  const [loading,    setLoading]    = useState(!activeSurvey)
   const [refreshing, setRefreshing] = useState(false)
 
-  const load = async (silent = false) => {
-    if (!silent) setLoading(true)
+  const load = useCallback(async (force = false) => {
     try {
+      if (force) invalidateSurveyCache()
       const res = await fetchActiveSurveyData(agent?.boothNo)
-      setPhases(res.phases  || [])
+      setPhases(res.phases   || [])
       setSurveys(res.surveys || [])
       setActiveSurvey(res.activeSurvey)
       setActivePhase(res.activePhase)
     } catch (_) {}
     setLoading(false)
     setRefreshing(false)
-  }
+  }, [agent?.boothNo])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(false) }, [])
 
   const getSurvey = (phase) => surveys.find(s => s.id === phase.surveyId) || activeSurvey
 
@@ -127,6 +127,7 @@ export default function TasksScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 20 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true) }} tintColor={theme.primary} />}
+        overScrollMode="never"
         showsVerticalScrollIndicator={false}
       >
         {phases.length === 0 ? (
