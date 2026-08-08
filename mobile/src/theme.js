@@ -1,0 +1,52 @@
+export const theme = {
+  primary:       '#5B3FD4',
+  primaryLight:  '#EDE9FF',
+  primaryMid:    '#7B63DC',
+  primaryDark:   '#4A32B0',
+  white:         '#FFFFFF',
+  background:    '#F6F5FF',
+  card:          '#FFFFFF',
+  text:          '#1A1040',
+  textSub:       '#6B7280',
+  textMuted:     '#9CA3AF',
+  border:        '#EDE9FF',
+  success:       '#10B981',
+  successLight:  '#ECFDF5',
+  warning:       '#F59E0B',
+  warningLight:  '#FFFBEB',
+  error:         '#EF4444',
+  errorLight:    '#FEF2F2',
+  info:          '#3B82F6',
+  infoLight:     '#EFF6FF',
+
+  shadow: {
+    shadowColor: '#5B3FD4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  shadowSm: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+
+  radius: {
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    xxl: 24,
+    full: 999,
+  },
+
+  font: {
+    regular:   'System',
+    medium:    'System',
+    semibold:  'System',
+    bold:      'System',
+  },
+}

@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "CAST",
+    "slug": "cast-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "cast",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.cast.mobile",
+      "versionCode": 1
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cast.mobile"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
