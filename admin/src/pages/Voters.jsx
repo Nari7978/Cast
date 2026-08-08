@@ -67,12 +67,12 @@ function CellContent({ col, val }) {
   return <span className="text-slate-600 whitespace-nowrap">{v}</span>
 }
 
-function CloudBanner({ status, fileName }) {
+function CloudBanner({ status, errorMsg }) {
   if (status === 'idle') return null
   const cfg = {
-    uploading: { bg: '#EEF2FF', border: '#C7D2FE', color: '#5B5CEB', icon: <Cloud size={14} className="animate-pulse" />, text: `Saving backup to cloud…` },
-    done:      { bg: '#ECFDF5', border: '#A7F3D0', color: '#10B981', icon: <CheckCircle2 size={14} />, text: 'Cloud backup saved.' },
-    error:     { bg: '#FEF9EC', border: '#FDE68A', color: '#D97706', icon: <AlertCircle size={14} />, text: 'Cloud backup failed — data still saved locally.' },
+    uploading: { bg: '#EEF2FF', border: '#C7D2FE', color: '#5B5CEB', icon: <Cloud size={14} className="animate-pulse" />, text: 'Saving to Firebase…' },
+    done:      { bg: '#ECFDF5', border: '#A7F3D0', color: '#10B981', icon: <CheckCircle2 size={14} />, text: 'Saved to Firebase.' },
+    error:     { bg: '#FEF2F2', border: '#FECACA', color: '#DC2626', icon: <AlertCircle size={14} />, text: errorMsg || 'Firebase save failed.' },
   }[status]
   return (
     <div className="flex items-center gap-2 px-4 py-2 rounded-xl border text-[12px] font-medium"
@@ -96,6 +96,7 @@ export default function Voters() {
   const [loadStatus,   setLoadStatus]   = useState('idle')
   // 'idle' | 'uploading' | 'done' | 'error'
   const [cloudStatus,  setCloudStatus]  = useState('idle')
+  const [cloudError,   setCloudError]   = useState('')
 
   const [visibleCols, setVisibleCols] = useState(() => new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
   const [showColPanel, setShowColPanel] = useState(false)
@@ -149,6 +150,7 @@ export default function Voters() {
     setHasFile(true)
     setLoadStatus('ready')
     setCloudStatus('idle')
+    setCloudError('')
     setPage(1)
     setSearch(''); setFilterStation(''); setFilterBooth('')
 
@@ -171,15 +173,23 @@ export default function Voters() {
     cacheImportMeta(meta)
     cacheVoters(parsed) // ~0.5s for 30K rows, runs without blocking UI
 
-    // 4. Cloud backup in background (optional but enables cross-device access)
+    // 4. Cloud backup — must reach Firebase server
     setCloudStatus('uploading')
+    setCloudError('')
     Promise.all([
       uploadBooths(parsed, boothCol, stationCol),
       saveImportMeta(meta),
     ]).then(() => {
       setCloudStatus('done')
       setTimeout(() => setCloudStatus('idle'), 3000)
-    }).catch(() => setCloudStatus('error'))
+    }).catch(err => {
+      const msg = err?.code === 'permission-denied'
+        ? 'Firebase permission denied — go to Firestore Console → Rules and set: allow read, write: if true;'
+        : `Firebase error: ${err?.message || err}`
+      setCloudError(msg)
+      setCloudStatus('error')
+      console.error('[Voters] Firebase write failed:', err)
+    })
   }, [])
 
   // ── Detected column names from meta ────
@@ -396,7 +406,7 @@ export default function Voters() {
             </div>
 
             {/* Cloud backup status */}
-            <CloudBanner status={cloudStatus} />
+            <CloudBanner status={cloudStatus} errorMsg={cloudError} />
 
             {/* Column panel */}
             {showColPanel && (
