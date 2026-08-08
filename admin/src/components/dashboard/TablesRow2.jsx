@@ -1,34 +1,9 @@
 import { ArrowRight } from 'lucide-react'
 
-const topBooths = [
-  { rank: 1, name: 'Booth 42 – Rishikesh',  coverage: 98, responses: 1842, completion: 98 },
-  { rank: 2, name: 'Booth 17 – Haridwar',    coverage: 95, responses: 1654, completion: 95 },
-  { rank: 3, name: 'Booth 89 – Dehradun',    coverage: 92, responses: 1432, completion: 92 },
-  { rank: 4, name: 'Booth 23 – Roorkee',     coverage: 89, responses: 1287, completion: 89 },
-  { rank: 5, name: 'Booth 61 – Mussoorie',   coverage: 87, responses: 1124, completion: 87 },
-]
-
-const topAgents = [
-  { rank: 1, name: 'Rajesh Kumar',  booths: 8, responses: 2840, completion: 96 },
-  { rank: 2, name: 'Priya Sharma',  booths: 6, responses: 2320, completion: 94 },
-  { rank: 3, name: 'Amit Singh',    booths: 7, responses: 2180, completion: 91 },
-  { rank: 4, name: 'Sunita Devi',   booths: 5, responses: 1920, completion: 89 },
-  { rank: 5, name: 'Vikram Patel',  booths: 6, responses: 1840, completion: 87 },
-]
-
-const lowestBooths = [
-  { rank: 1, name: 'Booth 112 – Tehri',       responses: 124, coverage: 12, completion: 12, last: '3d ago' },
-  { rank: 2, name: 'Booth 78 – Uttarkashi',   responses: 198, coverage: 18, completion: 18, last: '2d ago' },
-  { rank: 3, name: 'Booth 34 – Chamoli',      responses: 241, coverage: 23, completion: 23, last: '1d ago' },
-  { rank: 4, name: 'Booth 95 – Pithoragarh',  responses: 287, coverage: 27, completion: 27, last: '4d ago' },
-  { rank: 5, name: 'Booth 156 – Bageshwar',   responses: 312, coverage: 29, completion: 29, last: '5d ago' },
-]
-
-function RankBadge({ rank }) {
-  const colors = ['#5B5CEB', '#10B981', '#F59E0B', '#94A3B8', '#94A3B8']
+function RankBadge({ rank, color = '#5B5CEB' }) {
   return (
     <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
-      style={{ background: colors[rank - 1] }}>
+      style={{ background: color }}>
       {rank}
     </div>
   )
@@ -64,129 +39,147 @@ function Card({ title, subtitle, children, link }) {
   )
 }
 
-function TopBoothsTable() {
+function TopBoothsTable({ stats }) {
+  const booths = [...(stats?.booths || [])]
+    .sort((a, b) => (b.voterCount || 0) - (a.voterCount || 0))
+    .slice(0, 5)
+
   return (
-    <Card title="Top 5 Performing Booths" subtitle="By completion rate · Phase 2" link>
-      <table className="w-full">
-        <thead>
-          <tr>
-            {['#', 'Booth', 'Coverage', 'Responses', 'Completion'].map(h => (
-              <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 pb-2.5 pr-2 first:pr-3">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-50">
-          {topBooths.map(row => (
-            <tr key={row.rank} className="hover:bg-slate-50/50 transition-colors">
-              <td className="py-2.5 pr-3"><RankBadge rank={row.rank} /></td>
-              <td className="py-2.5 pr-2">
-                <p className="text-slate-700 text-[12px] font-medium leading-tight">{row.name}</p>
-              </td>
-              <td className="py-2.5 pr-2">
-                <span className="text-[12px] font-semibold text-slate-700">{row.coverage}%</span>
-              </td>
-              <td className="py-2.5 pr-2">
-                <span className="text-[12px] text-slate-600">{row.responses.toLocaleString()}</span>
-              </td>
-              <td className="py-2.5 w-28">
-                <CompletionBar value={row.completion} color="#10B981" />
-              </td>
+    <Card title="Top 5 Booths" subtitle="By voter count" link>
+      {booths.length === 0 ? (
+        <p className="text-slate-300 text-[12px] text-center py-6">No booth data yet</p>
+      ) : (
+        <table className="w-full">
+          <thead>
+            <tr>
+              {['#', 'Booth', 'Station', 'Voters'].map(h => (
+                <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 pb-2.5 pr-2 first:pr-3">{h}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {booths.map((b, i) => (
+              <tr key={b.boothNo} className="hover:bg-slate-50/50 transition-colors">
+                <td className="py-2.5 pr-3">
+                  <RankBadge rank={i + 1} color={['#5B5CEB','#10B981','#F59E0B','#94A3B8','#94A3B8'][i]} />
+                </td>
+                <td className="py-2.5 pr-2">
+                  <span className="text-[12px] font-bold text-[#5B5CEB] bg-[#EEF2FF] border border-[#C7D2FE] px-2 py-0.5 rounded-md">
+                    {b.boothNo}
+                  </span>
+                </td>
+                <td className="py-2.5 pr-2">
+                  <p className="text-slate-600 text-[12px] truncate max-w-[120px]">{b.pollingStation || '—'}</p>
+                </td>
+                <td className="py-2.5">
+                  <span className="text-[12px] font-semibold text-slate-700">{(b.voterCount || 0).toLocaleString()}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </Card>
   )
 }
 
-function TopAgentsTable() {
+function TopAgentsTable({ stats }) {
+  const agents = (stats?.agents || []).slice(0, 5)
+
   return (
-    <Card title="Top 5 Booth Agents" subtitle="By response count · Phase 2" link>
-      <table className="w-full">
-        <thead>
-          <tr>
-            {['#', 'Agent', 'Booths', 'Responses', 'Completion'].map(h => (
-              <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 pb-2.5 pr-2 first:pr-3">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-50">
-          {topAgents.map(row => (
-            <tr key={row.rank} className="hover:bg-slate-50/50 transition-colors">
-              <td className="py-2.5 pr-3"><RankBadge rank={row.rank} /></td>
-              <td className="py-2.5 pr-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-[10px] font-bold">
-                    {row.name[0]}
+    <Card title="Top 5 Booth Agents" subtitle="By name · All phases" link>
+      {agents.length === 0 ? (
+        <p className="text-slate-300 text-[12px] text-center py-6">No agents added yet</p>
+      ) : (
+        <table className="w-full">
+          <thead>
+            <tr>
+              {['#', 'Agent', 'Status', 'Phase'].map(h => (
+                <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 pb-2.5 pr-2 first:pr-3">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {agents.map((a, i) => (
+              <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                <td className="py-2.5 pr-3">
+                  <RankBadge rank={i + 1} color={['#5B5CEB','#10B981','#F59E0B','#94A3B8','#94A3B8'][i]} />
+                </td>
+                <td className="py-2.5 pr-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-[10px] font-bold">
+                      {(a.name || '?')[0].toUpperCase()}
+                    </div>
+                    <p className="text-slate-700 text-[12px] font-medium">{a.name || '—'}</p>
                   </div>
-                  <p className="text-slate-700 text-[12px] font-medium">{row.name}</p>
-                </div>
-              </td>
-              <td className="py-2.5 pr-2">
-                <span className="text-[12px] font-semibold text-slate-700">{row.booths}</span>
-              </td>
-              <td className="py-2.5 pr-2">
-                <span className="text-[12px] text-slate-600">{row.responses.toLocaleString()}</span>
-              </td>
-              <td className="py-2.5 w-28">
-                <CompletionBar value={row.completion} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
-  )
-}
-
-function LowestBoothsTable() {
-  return (
-    <Card title="Lowest Performing Booths" subtitle="Needs immediate attention" link>
-      <table className="w-full">
-        <thead>
-          <tr>
-            {['#', 'Booth', 'Responses', 'Coverage', 'Completion', 'Last Active'].map(h => (
-              <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 pb-2.5 pr-2 first:pr-3">{h}</th>
+                </td>
+                <td className="py-2.5 pr-2">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                    a.status === 'Active' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400 bg-slate-100'
+                  }`}>{a.status || 'Unknown'}</span>
+                </td>
+                <td className="py-2.5">
+                  <span className="text-[12px] text-slate-500">{a.phase || '—'}</span>
+                </td>
+              </tr>
             ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-50">
-          {lowestBooths.map((row, i) => (
-            <tr key={row.rank} className="hover:bg-slate-50/50 transition-colors">
-              <td className="py-2.5 pr-3">
-                <div className="w-6 h-6 rounded-full bg-red-50 flex items-center justify-center text-red-400 text-[10px] font-bold">
-                  {row.rank}
-                </div>
-              </td>
-              <td className="py-2.5 pr-2">
-                <p className="text-slate-700 text-[12px] font-medium leading-tight">{row.name}</p>
-              </td>
-              <td className="py-2.5 pr-2">
-                <span className="text-[12px] text-slate-600">{row.responses}</span>
-              </td>
-              <td className="py-2.5 pr-2">
-                <span className="text-[12px] font-semibold text-red-500">{row.coverage}%</span>
-              </td>
-              <td className="py-2.5 pr-2 w-24">
-                <CompletionBar value={row.completion} color="#EF4444" />
-              </td>
-              <td className="py-2.5">
-                <span className="text-[11px] text-slate-400">{row.last}</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      )}
     </Card>
   )
 }
 
-export default function TablesRow2() {
+function AssignmentsTable({ stats }) {
+  const assignments = (stats?.assignments || []).slice(0, 5)
+
+  return (
+    <Card title="Recent Assignments" subtitle="Latest created" link>
+      {assignments.length === 0 ? (
+        <p className="text-slate-300 text-[12px] text-center py-6">No assignments yet</p>
+      ) : (
+        <table className="w-full">
+          <thead>
+            <tr>
+              {['#', 'Name', 'Booths', 'Status'].map(h => (
+                <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 pb-2.5 pr-2 first:pr-3">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {assignments.map((a, i) => (
+              <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                <td className="py-2.5 pr-3">
+                  <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-400 text-[10px] font-bold">
+                    {i + 1}
+                  </div>
+                </td>
+                <td className="py-2.5 pr-2">
+                  <p className="text-slate-700 text-[12px] font-medium truncate max-w-[120px]">{a.name || '—'}</p>
+                </td>
+                <td className="py-2.5 pr-2">
+                  <span className="text-[12px] font-semibold text-slate-700">{a.boothCount || 0}</span>
+                </td>
+                <td className="py-2.5">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                    a.status === 'Active' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400 bg-slate-100'
+                  }`}>{a.status || '—'}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
+  )
+}
+
+export default function TablesRow2({ stats }) {
   return (
     <div className="grid grid-cols-3 gap-5">
-      <TopBoothsTable />
-      <TopAgentsTable />
-      <LowestBoothsTable />
+      <TopBoothsTable stats={stats} />
+      <TopAgentsTable stats={stats} />
+      <AssignmentsTable stats={stats} />
     </div>
   )
 }
