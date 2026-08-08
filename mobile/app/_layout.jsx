@@ -33,7 +33,7 @@ function AuthGuard() {
         fetchActiveSurveyData(agent.boothNo)
           .then(res => { setActiveSurvey(res.activeSurvey); setActivePhase(res.activePhase) })
           .catch(() => {})
-        fetchActivePoll().then(setActivePoll).catch(() => {})
+        fetchActivePoll(agent.boothNo).then(setActivePoll).catch(() => {})
         startRealtimeSync(agent.boothNo)
       }
     } else {

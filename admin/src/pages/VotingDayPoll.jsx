@@ -4,22 +4,24 @@ import {
   fetchPolls, createPoll, updatePoll, deletePoll,
   setActivePoll, deactivateAllPolls, fetchPollResponses, clearPollResponses,
 } from '../firebase/pollService'
-import { Vote, Plus, Trash2, Play, Square, RefreshCw, BarChart2, X } from 'lucide-react'
+import { Vote, Plus, Trash2, Play, Square, RefreshCw, BarChart2, X, Radio } from 'lucide-react'
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-function tally(responses, options) {
-  const counts = {}
-  options.forEach(o => { counts[o] = 0 })
-  responses.forEach(r => { if (counts[r.answer] !== undefined) counts[r.answer]++ })
-  return counts
-}
+const COLORS = ['#5B5CEB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 
 function pct(n, total) {
   return total === 0 ? 0 : Math.round((n / total) * 100)
 }
 
-const COLORS = ['#5B5CEB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
+// tally uses r.option (the DB column name)
+function tallyResponses(responses, options) {
+  const counts = {}
+  options.forEach(o => { counts[o] = 0 })
+  responses.forEach(r => {
+    if (counts[r.option] !== undefined) counts[r.option]++
+    else if (r.option) counts[r.option] = (counts[r.option] || 0) + 1
+  })
+  return counts
+}
 
 // ── Create / Edit modal ───────────────────────────────────────────────────────
 
@@ -27,12 +29,27 @@ function PollModal({ initial, onClose, onSave }) {
   const [title,    setTitle]    = useState(initial?.title    || '')
   const [question, setQuestion] = useState(initial?.question || '')
   const [options,  setOptions]  = useState(initial?.options  || ['', ''])
+  const [booths,   setBooths]   = useState([])
+  const [assigned, setAssigned] = useState(initial?.assignedBooths || []) // [] = all booths
   const [saving,   setSaving]   = useState(false)
   const [err,      setErr]      = useState('')
 
-  const addOpt   = () => setOptions(o => [...o, ''])
+  useEffect(() => {
+    supabase.from('booths').select('*').order('inserted_at', { ascending: true })
+      .then(({ data }) => {
+        const list = (data || []).map(r => ({ id: r.id, ...r.data }))
+        setBooths(list)
+      })
+  }, [])
+
+  const toggleBooth = (no) => {
+    const s = String(no)
+    setAssigned(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
+  }
+
+  const addOpt    = () => setOptions(o => [...o, ''])
   const removeOpt = (i) => setOptions(o => o.filter((_, idx) => idx !== i))
-  const setOpt   = (i, v) => setOptions(o => o.map((x, idx) => idx === i ? v : x))
+  const setOpt    = (i, v) => setOptions(o => o.map((x, idx) => idx === i ? v : x))
 
   const handleSave = async () => {
     const opts = options.map(o => o.trim()).filter(Boolean)
@@ -41,7 +58,13 @@ function PollModal({ initial, onClose, onSave }) {
     if (opts.length < 2)  { setErr('At least 2 options required'); return }
     setSaving(true)
     try {
-      await onSave({ title: title.trim(), question: question.trim(), options: opts, status: initial?.status || 'Inactive' })
+      await onSave({
+        title: title.trim(),
+        question: question.trim(),
+        options: opts,
+        assignedBooths: assigned,
+        status: initial?.status || 'Inactive',
+      })
       onClose()
     } catch (e) { setErr(e.message) }
     setSaving(false)
@@ -54,17 +77,22 @@ function PollModal({ initial, onClose, onSave }) {
           <h2 className="text-lg font-bold text-gray-900">{initial ? 'Edit Poll' : 'Create Voting Day Poll'}</h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100"><X size={18} /></button>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-5">
+          {/* Title */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Poll Title</label>
             <input className="w-full border rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300"
               value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Voting Day Opinion Poll" />
           </div>
+
+          {/* Question */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Question</label>
             <input className="w-full border rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300"
               value={question} onChange={e => setQuestion(e.target.value)} placeholder="e.g. Which party do you want to vote?" />
           </div>
+
+          {/* Options */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Options</label>
             <div className="space-y-2">
@@ -86,6 +114,50 @@ function PollModal({ initial, onClose, onSave }) {
               </button>
             )}
           </div>
+
+          {/* Booth assignment */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Assign to Booths</label>
+              <button
+                onClick={() => setAssigned([])}
+                className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                  assigned.length === 0
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'text-gray-500 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                All Booths
+              </button>
+            </div>
+            {booths.length > 0 && (
+              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
+                {booths.map(b => {
+                  const no = String(b.boothNo || b.number || b.no || b.name || b.id)
+                  const sel = assigned.includes(no)
+                  return (
+                    <button
+                      key={b.id}
+                      onClick={() => toggleBooth(no)}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                        sel
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      Booth {no}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <p className="text-[11px] text-gray-400 mt-1.5">
+              {assigned.length === 0
+                ? 'Poll visible to all booth agents'
+                : `Poll visible to ${assigned.length} selected booth${assigned.length > 1 ? 's' : ''}`}
+            </p>
+          </div>
+
           {err && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
         </div>
         <div className="p-6 pt-0 flex gap-3 justify-end">
@@ -104,20 +176,28 @@ function PollModal({ initial, onClose, onSave }) {
 // ── Results panel ─────────────────────────────────────────────────────────────
 
 function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
-  const counts = tally(responses, poll.options || [])
-  const total  = responses.length
+  const options = poll.options || []
+  const counts  = tallyResponses(responses, options)
+  const total   = responses.length
+
+  // Group by booth
   const byBooth = {}
   responses.forEach(r => {
-    if (!byBooth[r.boothNo]) byBooth[r.boothNo] = {}
-    byBooth[r.boothNo][r.answer] = (byBooth[r.boothNo][r.answer] || 0) + 1
+    const b = r.boothNo || r['boothNo'] || '—'
+    if (!byBooth[b]) byBooth[b] = {}
+    const opt = r.option || r.answer || ''
+    byBooth[b][opt] = (byBooth[b][opt] || 0) + 1
   })
+
+  const boothEntries = Object.entries(byBooth).sort((a, b) => Number(a[0]) - Number(b[0]))
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b">
         <div>
           <h3 className="font-bold text-gray-900 text-sm">{poll.title}</h3>
-          <p className="text-xs text-gray-500 mt-0.5">{total} responses collected</p>
+          <p className="text-xs text-gray-500 mt-0.5">{total} total responses</p>
         </div>
         <div className="flex gap-2">
           <button onClick={onRefresh} disabled={refreshing}
@@ -131,16 +211,19 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
         </div>
       </div>
 
-      {/* Option tallies */}
-      <div className="p-5 space-y-3">
-        {(poll.options || []).map((opt, i) => {
+      {/* Overall tally */}
+      <div className="p-5 space-y-3 border-b">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Overall Results</p>
+        {options.map((opt, i) => {
           const n = counts[opt] || 0
           const p = pct(n, total)
           return (
             <div key={opt}>
               <div className="flex justify-between text-sm mb-1">
                 <span className="font-semibold text-gray-800">{opt}</span>
-                <span className="font-bold" style={{ color: COLORS[i % COLORS.length] }}>{n} <span className="text-gray-400 font-normal">({p}%)</span></span>
+                <span className="font-bold tabular-nums" style={{ color: COLORS[i % COLORS.length] }}>
+                  {n} <span className="text-gray-400 font-normal">({p}%)</span>
+                </span>
               </div>
               <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-500"
@@ -151,27 +234,59 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
         })}
       </div>
 
-      {/* By booth */}
-      {Object.keys(byBooth).length > 0 && (
-        <div className="border-t px-5 py-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">By Booth</p>
-          <div className="space-y-2 max-h-56 overflow-y-auto">
-            {Object.entries(byBooth).sort((a, b) => Number(a[0]) - Number(b[0])).map(([booth, tally]) => (
-              <div key={booth} className="flex items-center gap-3 text-xs">
-                <span className="font-bold text-gray-600 w-16 flex-shrink-0">Booth {booth}</span>
-                <div className="flex flex-wrap gap-1.5 flex-1">
-                  {Object.entries(tally).map(([ans, cnt]) => (
-                    <span key={ans} className="px-2 py-0.5 rounded-full text-white text-[10px] font-semibold"
-                      style={{ background: COLORS[(poll.options || []).indexOf(ans) % COLORS.length] }}>
-                      {ans}: {cnt}
-                    </span>
-                  ))}
+      {/* Booth-wise breakdown */}
+      <div className="p-5">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">Booth-wise Breakdown</p>
+        {boothEntries.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-4">No responses yet</p>
+        ) : (
+          <div className="space-y-0 max-h-72 overflow-y-auto">
+            {/* Header row */}
+            <div className="grid text-[10px] font-semibold text-gray-400 uppercase tracking-wide pb-2 border-b"
+              style={{ gridTemplateColumns: `80px repeat(${options.length}, 1fr) 60px` }}>
+              <span>Booth</span>
+              {options.map((o, i) => (
+                <span key={o} style={{ color: COLORS[i % COLORS.length] }} className="text-center">{o}</span>
+              ))}
+              <span className="text-right">Total</span>
+            </div>
+
+            {boothEntries.map(([booth, tally]) => {
+              const boothTotal = Object.values(tally).reduce((s, n) => s + n, 0)
+              return (
+                <div key={booth}
+                  className="grid items-center py-2.5 border-b border-gray-50 last:border-0"
+                  style={{ gridTemplateColumns: `80px repeat(${options.length}, 1fr) 60px` }}>
+                  <span className="text-xs font-bold text-gray-700">Booth {booth}</span>
+                  {options.map((opt, i) => {
+                    const n = tally[opt] || 0
+                    return (
+                      <span key={opt} className="text-center text-sm font-bold tabular-nums"
+                        style={{ color: n > 0 ? COLORS[i % COLORS.length] : '#CBD5E1' }}>
+                        {n}
+                      </span>
+                    )
+                  })}
+                  <span className="text-right text-xs font-bold text-gray-500">{boothTotal}</span>
                 </div>
-              </div>
-            ))}
+              )
+            })}
+
+            {/* Total row */}
+            <div className="grid items-center pt-2.5 mt-1 border-t-2 border-gray-200"
+              style={{ gridTemplateColumns: `80px repeat(${options.length}, 1fr) 60px` }}>
+              <span className="text-xs font-bold text-gray-900">TOTAL</span>
+              {options.map((opt, i) => (
+                <span key={opt} className="text-center text-sm font-black tabular-nums"
+                  style={{ color: COLORS[i % COLORS.length] }}>
+                  {counts[opt] || 0}
+                </span>
+              ))}
+              <span className="text-right text-xs font-black text-gray-900">{total}</span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -180,9 +295,9 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
 
 export default function VotingDayPoll() {
   const [polls,      setPolls]      = useState([])
-  const [responses,  setResponses]  = useState({})   // pollId → []
+  const [responses,  setResponses]  = useState({})
   const [loading,    setLoading]    = useState(true)
-  const [modal,      setModal]      = useState(null)  // null | 'create' | poll object
+  const [modal,      setModal]      = useState(null)
   const [activePoll, setActivePollState] = useState(null)
   const [refreshing, setRefreshing] = useState({})
   const channelRef = useRef(null)
@@ -194,7 +309,6 @@ export default function VotingDayPoll() {
       setPolls(ps)
       const active = ps.find(p => p.status === 'Active') || null
       setActivePollState(active)
-      // Load responses for active poll
       if (active) {
         const res = await fetchPollResponses(active.id)
         setResponses(prev => ({ ...prev, [active.id]: res }))
@@ -205,9 +319,8 @@ export default function VotingDayPoll() {
 
   useEffect(() => {
     load()
-    // Live results via Realtime
     channelRef.current = supabase
-      .channel('poll-admin')
+      .channel('poll-admin-live')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'poll_responses' }, payload => {
         const r = payload.new
         setResponses(prev => ({
@@ -219,41 +332,25 @@ export default function VotingDayPoll() {
     return () => { if (channelRef.current) supabase.removeChannel(channelRef.current) }
   }, [])
 
-  const handleCreate = async (data) => {
-    await createPoll(data)
-    await load()
-  }
-
-  const handleUpdate = async (data) => {
-    await updatePoll(modal.id, data)
-    await load()
-  }
-
-  const handleDelete = async (poll) => {
+  const handleCreate     = async (data) => { await createPoll(data); await load() }
+  const handleUpdate     = async (data) => { await updatePoll(modal.id, data); await load() }
+  const handleDelete     = async (poll) => {
     if (!confirm(`Delete "${poll.title}"?`)) return
-    await deletePoll(poll.id)
-    await load()
+    await deletePoll(poll.id); await load()
   }
-
-  const handleActivate = async (poll) => {
+  const handleActivate   = async (poll) => {
     await setActivePoll(poll.id)
     const res = await fetchPollResponses(poll.id)
     setResponses(prev => ({ ...prev, [poll.id]: res }))
     await load()
   }
-
-  const handleDeactivate = async () => {
-    await deactivateAllPolls()
-    await load()
-  }
-
-  const handleClear = async (pollId) => {
+  const handleDeactivate = async () => { await deactivateAllPolls(); await load() }
+  const handleClear      = async (pollId) => {
     if (!confirm('Clear all responses for this poll?')) return
     await clearPollResponses(pollId)
     setResponses(prev => ({ ...prev, [pollId]: [] }))
   }
-
-  const handleRefresh = async (pollId) => {
+  const handleRefresh    = async (pollId) => {
     setRefreshing(r => ({ ...r, [pollId]: true }))
     const res = await fetchPollResponses(pollId)
     setResponses(prev => ({ ...prev, [pollId]: res }))
@@ -261,14 +358,14 @@ export default function VotingDayPoll() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
+    <div className="p-6 max-w-6xl mx-auto">
+      {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Vote size={24} style={{ color: '#5B5CEB' }} /> Voting Day Poll
+            <Radio size={22} style={{ color: '#5B5CEB' }} /> Voting Day Poll
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Create questions shown to all booth agents on voting day — no voter list needed</p>
+          <p className="text-sm text-gray-500 mt-1">Assign live tally questions to booth agents — no voter list needed</p>
         </div>
         <button
           onClick={() => setModal('create')}
@@ -279,38 +376,35 @@ export default function VotingDayPoll() {
         </button>
       </div>
 
-      {/* SQL reminder banner */}
-      {!loading && polls.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-sm text-amber-800">
-          <strong>First time setup:</strong> Make sure you've created the <code>polls</code> and <code>poll_responses</code> tables in Supabase. See setup instructions.
-        </div>
-      )}
-
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-400">Loading…</div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {/* Left: poll list */}
           <div className="space-y-4">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Your Polls</h2>
             {polls.length === 0 && (
-              <div className="text-center py-16 text-gray-400">
-                <Vote size={36} className="mx-auto mb-3 opacity-30" />
-                <p className="text-sm">No polls yet. Create one above.</p>
+              <div className="text-center py-16 text-gray-400 bg-white rounded-2xl border border-gray-100">
+                <Radio size={36} className="mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No polls yet. Create one to get started.</p>
               </div>
             )}
             {polls.map(poll => {
               const isActive = poll.status === 'Active'
+              const boothLabel = !poll.assignedBooths?.length
+                ? 'All Booths'
+                : `Booths: ${poll.assignedBooths.join(', ')}`
               return (
                 <div key={poll.id} className={`bg-white rounded-2xl border shadow-sm p-4 ${isActive ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-gray-100'}`}>
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start gap-2 mb-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 mb-1">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                           {isActive ? '● LIVE' : 'Inactive'}
                         </span>
+                        <span className="text-[10px] text-gray-400 font-medium">{boothLabel}</span>
                       </div>
-                      <p className="font-semibold text-gray-900 text-sm mt-1 truncate">{poll.title}</p>
+                      <p className="font-semibold text-gray-900 text-sm truncate">{poll.title}</p>
                       <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{poll.question}</p>
                     </div>
                   </div>
@@ -363,14 +457,13 @@ export default function VotingDayPoll() {
             ) : (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-gray-400">
                 <BarChart2 size={32} className="mx-auto mb-3 opacity-30" />
-                <p className="text-sm">Activate a poll to see live results here</p>
+                <p className="text-sm">Activate a poll to see live booth-wise results here</p>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Modal */}
       {modal && (
         <PollModal
           initial={modal === 'create' ? null : modal}

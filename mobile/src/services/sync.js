@@ -68,7 +68,7 @@ export function startRealtimeSync(boothNo) {
 
     // Voting Day Poll activated/changed by admin
     .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, () => {
-      fetchActivePoll().then(poll => {
+      fetchActivePoll(boothNo).then(poll => {
         useStore.getState().setActivePoll(poll)
       }).catch(() => {})
     })
@@ -123,14 +123,19 @@ export async function fetchActiveSurveyData(boothNo) {
   return _surveyCache
 }
 
-export async function fetchActivePoll() {
+export async function fetchActivePoll(boothNo) {
   const { data, error } = await supabase
     .from('polls')
     .select('*')
     .order('inserted_at', { ascending: false })
   if (error) throw error
   const rows = (data || []).map(r => ({ id: r.id, ...r.data, inserted_at: r.inserted_at }))
-  return rows.find(p => p.status === 'Active') || null
+  const active = rows.find(p => p.status === 'Active')
+  if (!active) return null
+  // If assignedBooths is empty/null → visible to all; otherwise check membership
+  const assigned = active.assignedBooths
+  if (!assigned || assigned.length === 0) return active
+  return assigned.includes(String(boothNo)) ? active : null
 }
 
 export async function fetchVotersForBooth(boothNo) {
