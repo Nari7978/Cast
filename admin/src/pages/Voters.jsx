@@ -70,9 +70,9 @@ function CellContent({ col, val }) {
 function CloudBanner({ status, errorMsg }) {
   if (status === 'idle') return null
   const cfg = {
-    uploading: { bg: '#EEF2FF', border: '#C7D2FE', color: '#5B5CEB', icon: <Cloud size={14} className="animate-pulse" />, text: 'Saving to Firebase…' },
-    done:      { bg: '#ECFDF5', border: '#A7F3D0', color: '#10B981', icon: <CheckCircle2 size={14} />, text: 'Saved to Firebase.' },
-    error:     { bg: '#FEF2F2', border: '#FECACA', color: '#DC2626', icon: <AlertCircle size={14} />, text: errorMsg || 'Firebase save failed.' },
+    uploading: { bg: '#EEF2FF', border: '#C7D2FE', color: '#5B5CEB', icon: <Cloud size={14} className="animate-pulse" />, text: 'Saving to Supabase…' },
+    done:      { bg: '#ECFDF5', border: '#A7F3D0', color: '#10B981', icon: <CheckCircle2 size={14} />, text: 'Saved to Supabase.' },
+    error:     { bg: '#FEF2F2', border: '#FECACA', color: '#DC2626', icon: <AlertCircle size={14} />, text: errorMsg || 'Supabase save failed.' },
   }[status]
   return (
     <div className="flex items-center gap-2 px-4 py-2 rounded-xl border text-[12px] font-medium"
