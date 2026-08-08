@@ -66,6 +66,45 @@ export async function fetchAllBooths(onRefresh) {
   return sorted
 }
 
+// ── Voters ────────────────────────────────────────────────────────────────────
+
+function normalizeVoter(row, boothCol) {
+  return {
+    boothNo: String(row[boothCol] || '').trim(),
+    data: {
+      name:       row.VOTER_NAME   || row.NAME        || '',
+      voterId:    row.EPIC_NO      || row.VOTER_ID     || '',
+      age:        row.AGE          || '',
+      gender:     row.GENDER       || '',
+      houseNo:    row.HOUSE_NO     || '',
+      mobile:     row.MOBILE       || '',
+      fatherName: row.FATHER_NAME  || '',
+      address:    row.ADDRESS      || '',
+      caste:      row.CASTE        || '',
+      slNo:       row.SL_NO        || row.PART_SL_NO  || '',
+    },
+  }
+}
+
+export async function clearVoters() {
+  const { error } = await supabase.from('voters').delete().neq('boothNo', '')
+  if (error) throw error
+}
+
+export async function uploadVoters(rawVoters, boothCol = 'BOOTH_NO') {
+  // Delete all existing voters first
+  await supabase.from('voters').delete().neq('boothNo', '')
+
+  const rows = rawVoters
+    .map(v => normalizeVoter(v, boothCol))
+    .filter(v => v.boothNo)
+
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const { error } = await supabase.from('voters').insert(rows.slice(i, i + CHUNK_SIZE))
+    if (error) throw error
+  }
+}
+
 // ── Import metadata ───────────────────────────────────────────────────────────
 
 export async function saveImportMeta(meta) {

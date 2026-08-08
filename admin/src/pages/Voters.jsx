@@ -6,7 +6,7 @@ import {
   AlertCircle, Cloud,
 } from 'lucide-react'
 import {
-  uploadBooths, clearBooths,
+  uploadBooths, clearBooths, uploadVoters, clearVoters,
   saveImportMeta,
   deleteImportMeta,
 } from '../firebase/voterService'
@@ -178,6 +178,7 @@ export default function Voters() {
     setCloudError('')
     Promise.all([
       uploadBooths(parsed, boothCol, stationCol),
+      uploadVoters(parsed, boothCol),
       saveImportMeta(meta),
     ]).then(() => {
       setCloudStatus('done')
@@ -259,6 +260,7 @@ export default function Voters() {
     // Async cleanup — clear local storage, Firestore booths, and voter import meta
     clearVoterCache().catch(() => {})
     clearBooths().catch(() => {})
+    clearVoters().catch(() => {})
     deleteImportMeta().catch(() => {})
   }
 
