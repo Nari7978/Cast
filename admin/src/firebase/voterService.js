@@ -1,21 +1,17 @@
-import {
-  collection, doc, writeBatch, serverTimestamp,
-  setDoc, getDoc, getDocs, getDocsFromServer, deleteDoc,
-} from 'firebase/firestore'
-import { db } from './config'
+import { supabase } from '../supabase/config'
 import { readCache, writeCache } from '../utils/fsCache'
 
 const CHUNK_SIZE = 400
 
-// ── Booths (small collection, kept in Firestore) ─────────────────────────────
+// ── Booths ────────────────────────────────────────────────────────────────────
 
 export async function clearBooths() {
-  const snap = await getDocsFromServer(collection(db, 'booths'))
-  if (snap.empty) return
-  for (let i = 0; i < snap.docs.length; i += CHUNK_SIZE) {
-    const batch = writeBatch(db)
-    snap.docs.slice(i, i + CHUNK_SIZE).forEach(d => batch.delete(d.ref))
-    await batch.commit()
+  const { data } = await supabase.from('booths').select('boothNo')
+  if (!data?.length) return
+  for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+    const { error } = await supabase.from('booths').delete()
+      .in('boothNo', data.slice(i, i + CHUNK_SIZE).map(b => b.boothNo))
+    if (error) throw error
   }
 }
 
@@ -33,57 +29,52 @@ export async function uploadBooths(voters, boothCol = 'BOOTH_NO', stationCol = '
   const entries = Object.values(boothMap)
   const newKeys = new Set(entries.map(b => b.boothNo))
 
-  // Write new booths first — Firestore is never empty during the update
+  // Upsert all new booths
   for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
-    const batch = writeBatch(db)
-    entries.slice(i, i + CHUNK_SIZE).forEach(booth => {
-      batch.set(doc(db, 'booths', booth.boothNo), booth)
-    })
-    await batch.commit()
+    const { error } = await supabase.from('booths')
+      .upsert(entries.slice(i, i + CHUNK_SIZE), { onConflict: 'boothNo' })
+    if (error) throw error
   }
 
-  // Then remove any booths that are no longer in the new CSV (server read, not cache)
-  const snap = await getDocsFromServer(collection(db, 'booths'))
-  const stale = snap.docs.filter(d => !newKeys.has(d.id))
+  // Delete stale booths no longer in the new CSV
+  const { data: existing } = await supabase.from('booths').select('boothNo')
+  const stale = (existing || []).filter(b => !newKeys.has(b.boothNo)).map(b => b.boothNo)
   for (let i = 0; i < stale.length; i += CHUNK_SIZE) {
-    const batch = writeBatch(db)
-    stale.slice(i, i + CHUNK_SIZE).forEach(d => batch.delete(d.ref))
-    await batch.commit()
+    const { error } = await supabase.from('booths').delete().in('boothNo', stale.slice(i, i + CHUNK_SIZE))
+    if (error) throw error
   }
 
-  // Update session cache with new booth list
   writeCache('booths', entries.sort((a, b) => Number(a.boothNo) - Number(b.boothNo)))
 }
 
 export async function fetchAllBooths() {
   const cached = readCache('booths')
   if (cached) {
-    // Return cache immediately, refresh in background
-    getDocsFromServer(collection(db, 'booths')).then(snap => {
-      const fresh = snap.docs.map(d => d.data()).sort((a, b) => Number(a.boothNo) - Number(b.boothNo))
-      writeCache('booths', fresh)
+    supabase.from('booths').select('*').then(({ data }) => {
+      if (data) writeCache('booths', data.sort((a, b) => Number(a.boothNo) - Number(b.boothNo)))
     }).catch(() => {})
     return cached
   }
-  const snap = await getDocsFromServer(collection(db, 'booths'))
-  const data = snap.docs.map(d => d.data()).sort((a, b) => Number(a.boothNo) - Number(b.boothNo))
-  writeCache('booths', data)
-  return data
+  const { data, error } = await supabase.from('booths').select('*')
+  if (error) throw error
+  const sorted = data.sort((a, b) => Number(a.boothNo) - Number(b.boothNo))
+  writeCache('booths', sorted)
+  return sorted
 }
 
 // ── Import metadata ───────────────────────────────────────────────────────────
+
 export async function saveImportMeta(meta) {
-  await setDoc(doc(db, 'voter_imports', 'latest'), {
-    ...meta,
-    savedAt: serverTimestamp(),
-  })
+  const { error } = await supabase.from('voter_imports').upsert({ id: 'latest', data: meta })
+  if (error) throw error
 }
 
 export async function getImportMeta() {
-  const snap = await getDoc(doc(db, 'voter_imports', 'latest'))
-  return snap.exists() ? snap.data() : null
+  const { data } = await supabase.from('voter_imports').select('data').eq('id', 'latest').single()
+  return data?.data || null
 }
 
 export async function deleteImportMeta() {
-  await deleteDoc(doc(db, 'voter_imports', 'latest'))
+  const { error } = await supabase.from('voter_imports').delete().eq('id', 'latest')
+  if (error) throw error
 }
