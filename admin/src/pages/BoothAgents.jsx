@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react'
 import {
-  Search, Plus, Upload, Download, X, Eye, Edit2, Trash2,
-  Phone, Mail, ChevronDown, ChevronLeft, ChevronRight,
+  Search, Plus, Upload, Download, X, Eye, EyeOff, Edit2, Trash2,
+  Phone, ChevronLeft, ChevronRight,
   AlertCircle, Users, UserCheck, UserX, MapPin, RefreshCw,
+  Copy, Check, KeyRound,
 } from 'lucide-react'
 
 // ── Mock Data ──────────────────────────────────────────────────────────────────
@@ -57,7 +58,8 @@ const BOOTHS_LIST = [
 
 import { subscribeAgents, createAgent, updateAgent, deleteAgent as deleteAgentSvc } from '../firebase/agentService'
 
-const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', phase: 'Phase 2', stationId: '', boothId: '', status: 'Active', notes: '' }
+const generatePIN = () => String(Math.floor(1000 + Math.random() * 9000))
+const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', phase: 'Phase 2', stationId: '', boothId: '', status: 'Active', notes: '', pin: generatePIN() }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -99,6 +101,59 @@ function Field({ label, value }) {
 
 // ── Agent Drawer ──────────────────────────────────────────────────────────────
 
+function PINCell({ pin }) {
+  const [copied, setCopied] = useState(false)
+  const copy = (e) => {
+    e.stopPropagation()
+    navigator.clipboard.writeText(pin || '')
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  if (!pin) return <span className="text-slate-300 text-[12px]">—</span>
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="font-mono font-bold text-[13px] text-[#5B5CEB] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg tracking-widest">
+        {pin}
+      </span>
+      <button onClick={copy} className="w-6 h-6 flex items-center justify-center rounded text-slate-300 hover:text-[#5B5CEB] transition-colors">
+        {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+      </button>
+    </div>
+  )
+}
+
+function PINDisplay({ pin }) {
+  const [visible, setVisible] = useState(false)
+  const [copied,  setCopied]  = useState(false)
+  const copy = () => {
+    navigator.clipboard.writeText(pin || '')
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <div className="flex items-center justify-between py-2.5 border-b border-slate-50">
+      <span className="text-slate-400 text-[12px]">Login PIN</span>
+      <div className="flex items-center gap-2">
+        <span className="text-slate-700 text-[13px] font-bold font-mono tracking-widest">
+          {pin ? (visible ? pin : '••••') : '—'}
+        </span>
+        {pin && (
+          <>
+            <button onClick={() => setVisible(v => !v)}
+              className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 transition-colors">
+              {visible ? <EyeOff size={13} /> : <Eye size={13} />}
+            </button>
+            <button onClick={copy}
+              className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-[#5B5CEB] transition-colors">
+              {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function AgentDrawer({ agent, onClose, onEdit }) {
   return (
     <>
@@ -132,6 +187,16 @@ function AgentDrawer({ agent, onClose, onEdit }) {
               <Field label="Email"      value={agent.email}  />
               <Field label="Gender"     value={agent.gender} />
             </div>
+          </div>
+
+          <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100">
+            <div className="flex items-center gap-2 mb-3">
+              <KeyRound size={13} className="text-[#5B5CEB]" />
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#5B5CEB]">Login Credentials</p>
+            </div>
+            <Field label="Phone (Login ID)" value={agent.mobile} />
+            <PINDisplay pin={agent.pin} />
+            <p className="text-[11px] text-indigo-400 mt-2">Share these credentials with the agent to log in to the mobile app.</p>
           </div>
           <div className="bg-slate-50 rounded-2xl p-4">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-3">Assignment</p>
@@ -175,8 +240,9 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
   const [form, setForm] = useState(editingAgent
     ? { name: editingAgent.name, mobile: editingAgent.mobile, email: editingAgent.email,
         gender: editingAgent.gender, phase: editingAgent.phase, stationId: String(editingAgent.stationId),
-        boothId: String(editingAgent.boothId), status: editingAgent.status, notes: editingAgent.notes }
-    : EMPTY_FORM)
+        boothId: String(editingAgent.boothId), status: editingAgent.status, notes: editingAgent.notes,
+        pin: editingAgent.pin || generatePIN() }
+    : { ...EMPTY_FORM, pin: generatePIN() })
   const [errors, setErrors] = useState({})
 
   const stationBooths = useMemo(() =>
@@ -302,7 +368,7 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
               {errors.booth && !takenBooth && <p className="text-red-500 text-[11px] mt-1">{errors.booth}</p>}
             </div>
 
-            {/* Status + Notes */}
+            {/* Status + PIN */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Status</label>
@@ -310,6 +376,25 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
                   <option>Active</option>
                   <option>Inactive</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">
+                  Login PIN <span className="text-slate-400 font-normal">(4-digit)</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    value={form.pin}
+                    onChange={e => set('pin', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="Auto-generated"
+                    maxLength={4}
+                    className={`${inputCls(false)} font-mono tracking-widest text-center text-lg font-bold`}
+                  />
+                  <button type="button" onClick={() => set('pin', generatePIN())}
+                    className="px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-[#5B5CEB] hover:border-indigo-200 transition-colors flex-shrink-0"
+                    title="Generate new PIN">
+                    <RefreshCw size={14} />
+                  </button>
+                </div>
               </div>
             </div>
             <div>
@@ -482,7 +567,7 @@ export default function BoothAgents() {
             <table className="w-full">
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E8ECF4' }}>
-                  {['Agent', 'Mobile', 'Assigned Booth', 'Polling Station', 'Phase', 'Status', 'Last Updated', 'Actions'].map(h => (
+                  {['Agent', 'Mobile', 'PIN', 'Assigned Booth', 'Polling Station', 'Phase', 'Status', 'Last Updated', 'Actions'].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">
                       {h}
                     </th>
@@ -492,7 +577,7 @@ export default function BoothAgents() {
               <tbody className="divide-y divide-slate-50">
                 {paginated.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center">
+                    <td colSpan={9} className="py-16 text-center">
                       <div className="flex flex-col items-center">
                         <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center mb-3">
                           <Users size={22} className="text-slate-300" />
@@ -522,6 +607,9 @@ export default function BoothAgents() {
                         <Phone size={12} className="text-slate-400" />
                         {agent.mobile}
                       </div>
+                    </td>
+                    <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                      <PINCell pin={agent.pin} />
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
