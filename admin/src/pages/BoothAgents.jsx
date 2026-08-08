@@ -245,9 +245,8 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
     : { ...EMPTY_FORM, pin: generatePIN() })
   const [errors, setErrors] = useState({})
 
-  const stationBooths = useMemo(() =>
-    form.stationId ? BOOTHS_LIST.filter(b => b.stationId === Number(form.stationId)) : [],
-    [form.stationId])
+  const selectedBooth   = BOOTHS_LIST.find(b => b.id === Number(form.boothId))
+  const selectedStation = selectedBooth ? STATIONS.find(s => s.id === selectedBooth.stationId) : null
 
   const isBoothTaken = (boothId) =>
     agents.some(a => a.boothId === Number(boothId) && a.status === 'Active' && a.id !== editingAgent?.id)
@@ -256,29 +255,31 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
 
+  const selectBooth = (boothId) => {
+    const booth = BOOTHS_LIST.find(b => b.id === Number(boothId))
+    setForm(f => ({ ...f, boothId, stationId: booth ? String(booth.stationId) : '' }))
+  }
+
   const validate = () => {
     const e = {}
     if (!form.name.trim())   e.name   = 'Full name is required'
     if (!form.mobile.trim()) e.mobile = 'Mobile number is required'
     if (!/^\d{10}$/.test(form.mobile.trim())) e.mobile = 'Enter a valid 10-digit mobile number'
-    if (!form.stationId)     e.station = 'Select a polling station'
-    if (!form.boothId)       e.booth   = 'Select a booth'
-    if (takenBooth)          e.booth   = 'This booth already has an assigned active agent'
+    if (!form.boothId)       e.booth  = 'Select a booth'
+    if (takenBooth)          e.booth  = 'This booth already has an assigned active agent'
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
   const handleSave = () => {
     if (!validate()) return
-    const booth = BOOTHS_LIST.find(b => b.id === Number(form.boothId))
-    const station = STATIONS.find(s => s.id === Number(form.stationId))
     const data = {
       ...form,
-      stationId: Number(form.stationId),
+      stationId: selectedBooth?.stationId || '',
       boothId:   Number(form.boothId),
-      boothNo:   booth?.no,
-      boothName: booth?.name,
-      station:   station?.name,
+      boothNo:   selectedBooth?.no,
+      boothName: selectedBooth?.name,
+      station:   selectedStation?.name,
     }
     onSave(editingAgent ? { id: editingAgent.id, ...data } : data)
   }
@@ -338,22 +339,12 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
               </div>
             </div>
 
-            {/* Polling Station */}
-            <div>
-              <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Polling Station <span className="text-red-400">*</span></label>
-              <select value={form.stationId} onChange={e => { set('stationId', e.target.value); set('boothId', '') }} className={inputCls(errors.station)}>
-                <option value="">Select polling station...</option>
-                {STATIONS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              {errors.station && <p className="text-red-500 text-[11px] mt-1">{errors.station}</p>}
-            </div>
-
-            {/* Booth */}
+            {/* Booth (select first → Polling Station auto-fills) */}
             <div>
               <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Booth <span className="text-red-400">*</span></label>
-              <select value={form.boothId} onChange={e => set('boothId', e.target.value)} disabled={!form.stationId} className={inputCls(errors.booth)}>
+              <select value={form.boothId} onChange={e => selectBooth(e.target.value)} className={inputCls(errors.booth)}>
                 <option value="">Select booth...</option>
-                {stationBooths.map(b => (
+                {BOOTHS_LIST.map(b => (
                   <option key={b.id} value={b.id}>
                     Booth {b.no} – {b.name}{isBoothTaken(b.id) ? ' (Occupied)' : ''}
                   </option>
@@ -366,6 +357,15 @@ function AgentForm({ editingAgent, agents, onClose, onSave }) {
                 </div>
               )}
               {errors.booth && !takenBooth && <p className="text-red-500 text-[11px] mt-1">{errors.booth}</p>}
+            </div>
+
+            {/* Polling Station (auto-filled from booth selection) */}
+            <div>
+              <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Polling Station</label>
+              <div className={`flex items-center gap-2 w-full px-3 py-2.5 rounded-xl border text-[13px] ${selectedStation ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                <MapPin size={13} className={selectedStation ? 'text-indigo-400' : 'text-slate-300'} />
+                <span>{selectedStation ? selectedStation.name : 'Auto-filled when you select a booth'}</span>
+              </div>
             </div>
 
             {/* Status + PIN */}
