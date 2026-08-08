@@ -34,7 +34,7 @@ function DemoCard({ label, value, color }) {
 export default function HomeScreen() {
   const insets  = useSafeAreaInsets()
   const router  = useRouter()
-  const { agent, activeSurvey, activePhase, voters, setActiveSurvey, setActivePhase, setVoters, responses, dataLoadedAt } = useStore()
+  const { agent, activeSurvey, activePhase, voters, setActiveSurvey, setActivePhase, setVoters, responses, dataLoadedAt, activePoll } = useStore()
 
   const hasData = dataLoadedAt > 0 || voters.length > 0
   const [loading,    setLoading]    = useState(!hasData)
@@ -178,6 +178,24 @@ export default function HomeScreen() {
           ))}
         </View>
 
+        {/* Voting Day Poll Banner */}
+        {activePoll && (
+          <TouchableOpacity
+            style={styles.pollBanner}
+            onPress={() => router.push('/poll')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.pollBannerLeft}>
+              <View style={styles.pollLiveDot} />
+              <View>
+                <Text style={styles.pollBannerTag}>VOTING DAY POLL · LIVE</Text>
+                <Text style={styles.pollBannerTitle} numberOfLines={1}>{activePoll.question || activePoll.title}</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
+
         {/* CTA */}
         {activeSurvey && (
           <TouchableOpacity
@@ -259,6 +277,16 @@ const styles = StyleSheet.create({
   summaryLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   summaryLabel:{ color: theme.textSub, fontSize: 13 },
   summaryValue:{ color: theme.text, fontSize: 13, fontWeight: '700' },
+
+  pollBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#E11D48', borderRadius: theme.radius.xl,
+    padding: 16, marginBottom: 16, ...theme.shadow,
+  },
+  pollBannerLeft:  { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  pollLiveDot:     { width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff', opacity: 0.9 },
+  pollBannerTag:   { color: 'rgba(255,255,255,0.75)', fontSize: 9, fontWeight: '700', letterSpacing: 1.2, marginBottom: 2 },
+  pollBannerTitle: { color: '#fff', fontSize: 14, fontWeight: '700', flex: 1 },
 
   ctaBtn:      { borderRadius: theme.radius.xl, overflow: 'hidden', ...theme.shadow },
   ctaGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 18 },

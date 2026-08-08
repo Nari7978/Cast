@@ -14,6 +14,7 @@ import Reports from './pages/Reports'
 import KPIManagement from './pages/KPIManagement'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
+import VotingDayPoll from './pages/VotingDayPoll'
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth()
@@ -38,6 +39,7 @@ function AppRoutes() {
         <Route path="kpi" element={<KPIManagement />} />
         <Route path="users" element={<Users />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="voting-day-poll" element={<VotingDayPoll />} />
       </Route>
     </Routes>
   )

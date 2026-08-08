@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, MapPin, Users, UserCheck, Layers,
-  ClipboardList, ClipboardCheck, MessageSquare,
+  ClipboardList, ClipboardCheck, MessageSquare, Radio,
   BarChart2, Target, UserCog, Settings, LogOut, Vote,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -28,6 +28,7 @@ const navGroups = [
       { icon: ClipboardList,  label: 'Surveys',        path: '/surveys' },
       { icon: ClipboardCheck, label: 'Assign Surveys', path: '/assign-surveys' },
       { icon: MessageSquare,  label: 'Responses',      path: '/responses' },
+      { icon: Radio,          label: 'Voting Day Poll', path: '/voting-day-poll' },
     ],
   },
   {

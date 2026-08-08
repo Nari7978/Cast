@@ -37,9 +37,12 @@ export const useStore = create((set, get) => ({
   responses:     {},   // voterId → { answers, status, submittedAt }
   dataLoadedAt:  0,    // timestamp of last successful voter fetch
 
+  activePoll: null,
+
   setActiveSurvey: (survey) => set({ activeSurvey: survey }),
   setActivePhase:  (phase)  => set({ activePhase: phase }),
   setVoters:       (voters) => set({ voters, dataLoadedAt: Date.now() }),
+  setActivePoll:   (poll)   => set({ activePoll: poll }),
 
   // ── Offline Responses ─────────────────────────────────────────────────
   pendingResponses: [],

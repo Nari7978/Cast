@@ -66,6 +66,13 @@ export function startRealtimeSync(boothNo) {
       }).catch(() => {})
     })
 
+    // Voting Day Poll activated/changed by admin
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, () => {
+      fetchActivePoll().then(poll => {
+        useStore.getState().setActivePoll(poll)
+      }).catch(() => {})
+    })
+
     .subscribe()
 }
 
@@ -114,6 +121,16 @@ export async function fetchActiveSurveyData(boothNo) {
   _surveyCache = { activeSurvey, activePhase, phases, surveys }
   _surveyCacheAt = Date.now()
   return _surveyCache
+}
+
+export async function fetchActivePoll() {
+  const { data, error } = await supabase
+    .from('polls')
+    .select('*')
+    .order('inserted_at', { ascending: false })
+  if (error) throw error
+  const rows = (data || []).map(r => ({ id: r.id, ...r.data, inserted_at: r.inserted_at }))
+  return rows.find(p => p.status === 'Active') || null
 }
 
 export async function fetchVotersForBooth(boothNo) {

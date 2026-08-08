@@ -4,7 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { useStore } from '../src/store/useStore'
-import { startSyncListener, startRealtimeSync, stopRealtimeSync, fetchVotersForBooth, fetchActiveSurveyData } from '../src/services/sync'
+import { startSyncListener, startRealtimeSync, stopRealtimeSync, fetchVotersForBooth, fetchActiveSurveyData, fetchActivePoll } from '../src/services/sync'
 
 function AuthGuard() {
   const router   = useRouter()
@@ -26,13 +26,14 @@ function AuthGuard() {
   useEffect(() => {
     if (isAuthenticated) {
       startSyncListener()
-      const { agent, setVoters, setActiveSurvey, setActivePhase, loadPending } = useStore.getState()
+      const { agent, setVoters, setActiveSurvey, setActivePhase, setActivePoll, loadPending } = useStore.getState()
       loadPending()
       if (agent?.boothNo) {
         fetchVotersForBooth(agent.boothNo).then(setVoters).catch(() => {})
         fetchActiveSurveyData(agent.boothNo)
           .then(res => { setActiveSurvey(res.activeSurvey); setActivePhase(res.activePhase) })
           .catch(() => {})
+        fetchActivePoll().then(setActivePoll).catch(() => {})
         startRealtimeSync(agent.boothNo)
       }
     } else {
