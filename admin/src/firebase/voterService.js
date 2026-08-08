@@ -47,15 +47,19 @@ export async function uploadBooths(voters, boothCol = 'BOOTH_NO', stationCol = '
   writeCache('booths', entries.sort((a, b) => Number(a.boothNo) - Number(b.boothNo)))
 }
 
-export async function fetchAllBooths() {
+export async function fetchAllBooths(onRefresh) {
   const cached = readCache('booths')
   if (cached) {
-    supabase.from('booths').select('*').then(({ data }) => {
-      if (data) writeCache('booths', data.sort((a, b) => Number(a.boothNo) - Number(b.boothNo)))
+    supabase.from('booths').select('*').limit(2000).then(({ data }) => {
+      if (data) {
+        const sorted = data.sort((a, b) => Number(a.boothNo) - Number(b.boothNo))
+        writeCache('booths', sorted)
+        onRefresh?.(sorted)
+      }
     }).catch(() => {})
     return cached
   }
-  const { data, error } = await supabase.from('booths').select('*')
+  const { data, error } = await supabase.from('booths').select('*').limit(2000)
   if (error) throw error
   const sorted = data.sort((a, b) => Number(a.boothNo) - Number(b.boothNo))
   writeCache('booths', sorted)

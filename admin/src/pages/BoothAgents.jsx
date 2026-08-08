@@ -386,7 +386,7 @@ export default function BoothAgents() {
   }), [])
 
   useEffect(() => {
-    fetchAllBooths().then(setBooths).catch(() => {})
+    fetchAllBooths(setBooths).then(setBooths).catch(() => {})
   }, [])
 
   const uniqueStations = useMemo(() =>
