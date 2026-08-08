@@ -106,7 +106,6 @@ export default function Voters() {
   const [page, setPage]                   = useState(1)
   const [drawerVoter, setDrawerVoter]     = useState(null)
   const [showConfirmClear, setShowConfirmClear] = useState(false)
-  const [clearing, setClearing]                 = useState(false)
 
   // ── On mount: restore from IndexedDB only (no network fetch on load) ────
   useEffect(() => {
@@ -231,25 +230,21 @@ export default function Voters() {
     return [page - 2, page - 1, page, page + 1, page + 2]
   }, [page, totalPages])
 
-  const handleClearAll = async () => {
-    setClearing(true)
-    try {
-      await clearVoterCache()
-      await deleteImportMeta()
-    } finally {
-      // Reset all UI state regardless of Firestore outcome
-      setVoters([])
-      setCsvHeaders(DEFAULT_HEADERS)
-      setVisibleCols(new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
-      setHasFile(false)
-      setImportMeta(null)
-      setLoadStatus('idle')
-      setCloudStatus('idle')
-      setSearch(''); setFilterStation(''); setFilterBooth('')
-      setPage(1)
-      setClearing(false)
-      setShowConfirmClear(false)
-    }
+  const handleClearAll = () => {
+    // Reset UI immediately — cleanup runs in background
+    setVoters([])
+    setCsvHeaders(DEFAULT_HEADERS)
+    setVisibleCols(new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
+    setHasFile(false)
+    setImportMeta(null)
+    setLoadStatus('idle')
+    setCloudStatus('idle')
+    setSearch(''); setFilterStation(''); setFilterBooth('')
+    setPage(1)
+    setShowConfirmClear(false)
+
+    clearVoterCache().catch(() => {})
+    deleteImportMeta().catch(() => {})
   }
 
   const handleSort = col => {
@@ -561,15 +556,15 @@ export default function Voters() {
             </p>
             <p className="text-slate-400 text-[12px] mb-6">You will need to re-import a CSV to restore the data.</p>
             <div className="flex gap-3 w-full">
-              <button onClick={() => setShowConfirmClear(false)} disabled={clearing}
-                className="flex-1 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50">
+              <button onClick={() => setShowConfirmClear(false)}
+                className="flex-1 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-semibold hover:bg-slate-50 transition-colors">
                 Cancel
               </button>
-              <button onClick={handleClearAll} disabled={clearing}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
+              <button onClick={handleClearAll}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
                 style={{ background: 'linear-gradient(135deg,#EF4444,#F87171)' }}>
-                {clearing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                {clearing ? 'Deleting…' : 'Yes, delete all'}
+                <Trash2 size={14} />
+                Yes, delete all
               </button>
             </div>
           </div>
