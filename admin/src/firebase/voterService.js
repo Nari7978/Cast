@@ -3,6 +3,7 @@ import {
   setDoc, getDoc, getDocs, getDocsFromServer, deleteDoc,
 } from 'firebase/firestore'
 import { db } from './config'
+import { readCache, writeCache } from '../utils/fsCache'
 
 const CHUNK_SIZE = 400
 
@@ -49,13 +50,25 @@ export async function uploadBooths(voters, boothCol = 'BOOTH_NO', stationCol = '
     stale.slice(i, i + CHUNK_SIZE).forEach(d => batch.delete(d.ref))
     await batch.commit()
   }
+
+  // Update session cache with new booth list
+  writeCache('booths', entries.sort((a, b) => Number(a.boothNo) - Number(b.boothNo)))
 }
 
 export async function fetchAllBooths() {
+  const cached = readCache('booths')
+  if (cached) {
+    // Return cache immediately, refresh in background
+    getDocsFromServer(collection(db, 'booths')).then(snap => {
+      const fresh = snap.docs.map(d => d.data()).sort((a, b) => Number(a.boothNo) - Number(b.boothNo))
+      writeCache('booths', fresh)
+    }).catch(() => {})
+    return cached
+  }
   const snap = await getDocsFromServer(collection(db, 'booths'))
-  return snap.docs
-    .map(d => d.data())
-    .sort((a, b) => Number(a.boothNo) - Number(b.boothNo))
+  const data = snap.docs.map(d => d.data()).sort((a, b) => Number(a.boothNo) - Number(b.boothNo))
+  writeCache('booths', data)
+  return data
 }
 
 // ── Import metadata ───────────────────────────────────────────────────────────

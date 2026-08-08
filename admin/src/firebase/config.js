@@ -1,10 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import {
-  initializeFirestore,
-  persistentLocalCache,
-  persistentSingleTabManager,
-} from 'firebase/firestore'
+import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDAbp1uhMq4higEf5oOraJfL_4OftxqJSs',
@@ -19,14 +15,5 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
-
-// Persist all Firestore data to IndexedDB — refreshes show cached data instantly
-// Single-tab manager: this tab always owns the network, so writes sync to
-// Firebase server immediately rather than queuing behind another tab's election.
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentSingleTabManager(),
-  }),
-})
-
+export const db = getFirestore(app)
 export default app
