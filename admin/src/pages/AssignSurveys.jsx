@@ -72,6 +72,8 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, bo
   const [rangeFrom, setRF]  = useState('')
   const [rangeTo, setRT]    = useState('')
   const [errors, setErrors] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const selectedPhase = phases.find(p => p.id === phaseId)
   const selectedForm  = surveyForms.find(f => f.id === formId)
@@ -119,12 +121,17 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, bo
     if (step === 2 && !validateStep2()) return
     setStep(s => s + 1)
   }
-  function save() {
+  async function save() {
     if (!validateStep3()) return
-    // Close instantly — Firestore write runs in background, onSnapshot updates the list
-    onClose()
-    onSave({ name, phaseId, formId, boothRange: 'Custom', boothCount: selBooths.size, agentCount: selBooths.size, status: 'Active', notes: '' })
-      .catch(e => console.error('Failed to save assignment:', e))
+    setSaving(true)
+    setSaveError('')
+    try {
+      await onSave({ name, phaseId, formId, boothRange: 'Custom', boothCount: selBooths.size, agentCount: selBooths.size, status: 'Active', notes: '' })
+      onClose()
+    } catch (e) {
+      setSaveError('Failed to save. Check your connection and try again.')
+      setSaving(false)
+    }
   }
 
   return (
@@ -301,15 +308,20 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, bo
         </div>
 
         {/* Modal footer */}
+        {saveError && (
+          <div className="mx-6 mb-0 mt-2 px-3 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 text-[12px] flex items-center gap-2">
+            <AlertCircle size={13} />{saveError}
+          </div>
+        )}
         <div className="px-6 py-4 border-t border-[#E8ECF4] flex items-center justify-between flex-shrink-0">
           <div>
-            {step > 1 && <button onClick={() => setStep(s => s - 1)} className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-[13px] font-medium transition-colors"><ChevronLeft size={14} /> Back</button>}
+            {step > 1 && <button onClick={() => setStep(s => s - 1)} disabled={saving} className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-[13px] font-medium transition-colors disabled:opacity-40"><ChevronLeft size={14} /> Back</button>}
           </div>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">Cancel</button>
+            <button onClick={onClose} disabled={saving} className="px-4 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors disabled:opacity-40">Cancel</button>
             {step < 3
               ? <button onClick={next} className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity" style={{ background: 'linear-gradient(135deg,#5B5CEB,#818CF8)' }}>Next <ChevronRight size={14} /></button>
-              : <button onClick={save} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity" style={{ background: 'linear-gradient(135deg,#5B5CEB,#818CF8)' }}>Create Assignment</button>
+              : <button onClick={save} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-70" style={{ background: 'linear-gradient(135deg,#5B5CEB,#818CF8)' }}>{saving && <Loader2 size={13} className="animate-spin" />}{saving ? 'Saving…' : 'Create Assignment'}</button>
             }
           </div>
         </div>

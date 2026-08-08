@@ -6,10 +6,11 @@ import {
   AlertCircle, Cloud,
 } from 'lucide-react'
 import {
-  uploadBooths,
+  uploadBooths, clearBooths,
   saveImportMeta,
   deleteImportMeta,
 } from '../firebase/voterService'
+import { clearFsCache } from '../utils/fsCache'
 import {
   cacheVoters, loadCachedVoters,
   cacheImportMeta, loadCachedImportMeta,
@@ -231,7 +232,6 @@ export default function Voters() {
   }, [page, totalPages])
 
   const handleClearAll = () => {
-    // Reset UI immediately — cleanup runs in background
     setVoters([])
     setCsvHeaders(DEFAULT_HEADERS)
     setVisibleCols(new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
@@ -243,7 +243,12 @@ export default function Voters() {
     setPage(1)
     setShowConfirmClear(false)
 
+    // Clear all caches immediately so other pages see no stale data
+    clearFsCache('booths')
+
+    // Async cleanup — clear local storage, Firestore booths, and voter import meta
     clearVoterCache().catch(() => {})
+    clearBooths().catch(() => {})
     deleteImportMeta().catch(() => {})
   }
 
