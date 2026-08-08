@@ -12,6 +12,8 @@ const SURVEY_TTL = 5 * 60 * 1000
 
 export function invalidateSurveyCache() { _surveyCacheAt = 0 }
 
+let realtimeChannel = null
+
 export function startSyncListener() {
   if (unsubscribe) return
   unsubscribe = NetInfo.addEventListener(state => {
@@ -25,6 +27,52 @@ export function stopSyncListener() {
   if (unsubscribe) {
     unsubscribe()
     unsubscribe = null
+  }
+}
+
+export function startRealtimeSync(boothNo) {
+  if (realtimeChannel) return
+
+  realtimeChannel = supabase
+    .channel('cast-live')
+
+    // Phase activated/changed by admin
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'phases' }, () => {
+      invalidateSurveyCache()
+      fetchActiveSurveyData(boothNo).then(res => {
+        const { setActiveSurvey, setActivePhase } = useStore.getState()
+        setActiveSurvey(res.activeSurvey)
+        setActivePhase(res.activePhase)
+      }).catch(() => {})
+    })
+
+    // Survey updated by admin
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'surveys' }, () => {
+      invalidateSurveyCache()
+      fetchActiveSurveyData(boothNo).then(res => {
+        const { setActiveSurvey, setActivePhase } = useStore.getState()
+        setActiveSurvey(res.activeSurvey)
+        setActivePhase(res.activePhase)
+      }).catch(() => {})
+    })
+
+    // Voters added/updated for this booth
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'voters',
+      filter: `boothNo=eq.${boothNo}`,
+    }, () => {
+      fetchVotersForBooth(boothNo).then(voters => {
+        useStore.getState().setVoters(voters)
+      }).catch(() => {})
+    })
+
+    .subscribe()
+}
+
+export function stopRealtimeSync() {
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel)
+    realtimeChannel = null
   }
 }
 
