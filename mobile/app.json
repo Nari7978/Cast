@@ -10,7 +10,7 @@
       "package": "com.cast.mobile",
       "versionCode": 1
     },
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cast.mobile"
