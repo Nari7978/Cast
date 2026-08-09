@@ -197,20 +197,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* CTA */}
-        {activeSurvey && (
-          <TouchableOpacity
-            style={styles.ctaBtn}
-            onPress={() => router.push('/survey/voters')}
-            activeOpacity={0.85}
-          >
-            <LinearGradient colors={['#5B3FD4', '#7B63DC']} style={styles.ctaGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-              <Ionicons name="play-circle" size={22} color="#fff" />
-              <Text style={styles.ctaBtnText}>Continue Current Survey</Text>
-              <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
 
         <View style={{ height: 24 }} />
       </View>
