@@ -35,7 +35,7 @@ const STATUS_CFG = {
 
 const CATEGORIES = ['Outreach', 'Issue Collection', 'Verification', 'Feedback', 'Exit Poll', 'Other']
 
-import { subscribeSurveyForms, createSurveyForm, updateSurveyForm } from '../firebase/surveyService'
+import { subscribeSurveyForms, createSurveyForm, updateSurveyForm, deleteSurveyForm } from '../firebase/surveyService'
 
 const LINKED_PHASES = []
 
@@ -416,6 +416,7 @@ export default function SurveyForms() {
   const [search, setSearch]     = useState('')
   const [filterStatus, setFSt]  = useState('')
   const [drawerForm, setDrawer] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   useEffect(() => subscribeSurveyForms(data => setForms(data)), [])
 
@@ -455,6 +456,12 @@ export default function SurveyForms() {
 
   async function archiveForm(id) {
     await updateSurveyForm(id, { status: 'Archived' })
+  }
+
+  async function handleDelete(form) {
+    await deleteSurveyForm(form.id)
+    setConfirmDelete(null)
+    if (drawerForm?.id === form.id) setDrawer(null)
   }
 
   // ── Builder view ──
@@ -559,6 +566,7 @@ export default function SurveyForms() {
                           <button onClick={() => openBuilder(f)} title="Edit"    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><Edit2 size={14} /></button>
                           <button onClick={() => dupForm(f)} title="Duplicate"   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><Copy size={14} /></button>
                           {f.status !== 'Archived' && <button onClick={() => archiveForm(f.id)} title="Archive" className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors"><Archive size={14} /></button>}
+                          <button onClick={() => setConfirmDelete(f)} title="Delete" className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
@@ -569,6 +577,30 @@ export default function SurveyForms() {
           </table>
         </div>
       </div>
+
+      {/* ── Delete Confirmation ── */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }}>
+          <div className="bg-white rounded-2xl border border-[#E8ECF4] w-[400px] p-6" style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.18)' }}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#FEF2F2' }}>
+                <Trash2 size={18} style={{ color: '#EF4444' }} />
+              </div>
+              <div>
+                <p className="text-slate-800 font-bold text-[15px]">Delete Survey Form</p>
+                <p className="text-slate-400 text-[12px] mt-0.5">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-slate-600 text-[13px] mb-5">
+              Are you sure you want to delete <span className="font-semibold text-slate-800">"{confirmDelete.name}"</span>? All associated data will be permanently removed.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">Cancel</button>
+              <button onClick={() => handleDelete(confirmDelete)} className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity" style={{ background: '#EF4444' }}>Delete Survey</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Drawer ── */}
       {drawerForm && (
@@ -682,6 +714,7 @@ export default function SurveyForms() {
               <button onClick={() => { openBuilder(drawerForm); setDrawer(null) }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors"><Edit2 size={14} /> Edit Form</button>
               <button onClick={() => dupForm(drawerForm)} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors"><Copy size={14} /></button>
               {drawerForm.status !== 'Archived' && <button onClick={() => archiveForm(drawerForm.id)} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-amber-100 text-amber-500 text-[13px] font-medium hover:bg-amber-50 transition-colors"><Archive size={14} /></button>}
+              <button onClick={() => setConfirmDelete(drawerForm)} className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-100 text-red-500 text-[13px] font-medium hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
             </div>
           </div>
         </>

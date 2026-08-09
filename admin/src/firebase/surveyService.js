@@ -39,6 +39,11 @@ export async function createSurveyForm(data) {
   if (error) throw error
 }
 
+export async function deleteSurveyForm(id) {
+  const { error } = await supabase.from(COL).delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function updateSurveyForm(id, data) {
   const { error } = await supabase.rpc('update_doc', {
     tbl: COL,
