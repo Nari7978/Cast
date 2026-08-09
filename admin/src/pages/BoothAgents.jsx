@@ -10,7 +10,7 @@ import { subscribeAgents, createAgent, updateAgent, deleteAgent as deleteAgentSv
 import { fetchAllBooths } from '../firebase/voterService'
 
 const generatePIN = () => String(Math.floor(1000 + Math.random() * 9000))
-const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', phase: 'Phase 2', boothNo: '', status: 'Active', notes: '', pin: generatePIN() }
+const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', boothNo: '', status: 'Active', notes: '', pin: generatePIN() }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -154,7 +154,6 @@ function AgentDrawer({ agent, onClose, onEdit }) {
             <div className="space-y-0">
               <Field label="Booth"           value={`Booth ${agent.boothNo}`} />
               <Field label="Polling Station" value={agent.station} />
-              <Field label="Phase"           value={agent.phase}   />
             </div>
           </div>
           <div className="bg-slate-50 rounded-2xl p-4">
@@ -190,7 +189,7 @@ function AgentDrawer({ agent, onClose, onEdit }) {
 function AgentForm({ editingAgent, agents, booths, onClose, onSave }) {
   const [form, setForm] = useState(editingAgent
     ? { name: editingAgent.name, mobile: editingAgent.mobile, email: editingAgent.email,
-        gender: editingAgent.gender, phase: editingAgent.phase,
+        gender: editingAgent.gender,
         boothNo: editingAgent.boothNo || '',
         status: editingAgent.status, notes: editingAgent.notes || '',
         pin: editingAgent.pin || generatePIN() }
@@ -268,20 +267,12 @@ function AgentForm({ editingAgent, agents, booths, onClose, onSave }) {
               </div>
             </div>
 
-            {/* Gender + Phase */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Gender</label>
-                <select value={form.gender} onChange={e => set('gender', e.target.value)} className={inputCls(false)}>
-                  {['Male', 'Female', 'Other'].map(g => <option key={g}>{g}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Phase</label>
-                <select value={form.phase} onChange={e => set('phase', e.target.value)} className={inputCls(false)}>
-                  {['Phase 1', 'Phase 2', 'Phase 3'].map(p => <option key={p}>{p}</option>)}
-                </select>
-              </div>
+            {/* Gender */}
+            <div>
+              <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Gender</label>
+              <select value={form.gender} onChange={e => set('gender', e.target.value)} className={inputCls(false)}>
+                {['Male', 'Female', 'Other'].map(g => <option key={g}>{g}</option>)}
+              </select>
             </div>
 
             {/* Booth (select first → Polling Station auto-fills) */}
@@ -476,13 +467,6 @@ export default function BoothAgents() {
             {uniqueStations.map(s => <option key={s} value={s}>{s === 'All' ? 'All Polling Stations' : s}</option>)}
           </select>
 
-          {/* Phase filter */}
-          <select className="px-3 py-2 bg-white border border-[#E8ECF4] rounded-xl text-[12px] text-slate-600 focus:outline-none">
-            <option>Phase 2</option>
-            <option>Phase 1</option>
-            <option>Phase 3</option>
-          </select>
-
           {/* Status tabs */}
           <div className="flex items-center gap-1">
             {['All', 'Active', 'Inactive'].map(s => (
@@ -520,7 +504,7 @@ export default function BoothAgents() {
             <table className="w-full">
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E8ECF4' }}>
-                  {['Agent', 'Mobile', 'PIN', 'Assigned Booth', 'Polling Station', 'Phase', 'Status', 'Last Updated', 'Actions'].map(h => (
+                  {['Agent', 'Mobile', 'PIN', 'Assigned Booth', 'Polling Station', 'Status', 'Last Updated', 'Actions'].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">
                       {h}
                     </th>
@@ -575,9 +559,6 @@ export default function BoothAgents() {
                     </td>
                     <td className="px-4 py-3.5">
                       <p className="text-slate-500 text-[12px] max-w-[180px] truncate">{agent.station}</p>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="text-slate-500 text-[12px]">{agent.phase}</span>
                     </td>
                     <td className="px-4 py-3.5">
                       <StatusBadge status={agent.status} />
