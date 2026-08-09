@@ -4,7 +4,7 @@ import {
   fetchPolls, createPoll, updatePoll, deletePoll,
   setActivePoll, deactivateAllPolls, fetchPollResponses, clearPollResponses,
 } from '../firebase/pollService'
-import { Vote, Plus, Trash2, Play, Square, RefreshCw, BarChart2, X, Radio } from 'lucide-react'
+import { Vote, Plus, Trash2, Play, Square, RefreshCw, BarChart2, X, Radio, Download, Trophy } from 'lucide-react'
 
 const COLORS = ['#5B5CEB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 
@@ -173,6 +173,48 @@ function PollModal({ initial, onClose, onSave }) {
   )
 }
 
+// ── Export CSV ────────────────────────────────────────────────────────────────
+
+function exportCSV(poll, responses, options, counts, boothRanked) {
+  const total = responses.length
+  const rows = []
+
+  rows.push([`Poll: ${poll.title}`])
+  rows.push([`Question: ${poll.question}`])
+  rows.push([`Total Responses: ${total}`])
+  rows.push([`Exported: ${new Date().toLocaleString('en-IN')}`])
+  rows.push([])
+
+  // Overall
+  rows.push(['OVERALL RESULTS'])
+  rows.push(['Option', 'Count', 'Percentage'])
+  options.forEach(opt => {
+    const n = counts[opt] || 0
+    rows.push([opt, n, `${pct(n, total)}%`])
+  })
+  rows.push([])
+
+  // Booth ranking
+  rows.push(['BOOTH PERFORMANCE RANKING'])
+  rows.push(['Rank', 'Booth', ...options, 'Total', 'Completion %'])
+  boothRanked.forEach((entry, idx) => {
+    const boothTotal = Object.values(entry.tally).reduce((s, n) => s + n, 0)
+    const boothPct   = total > 0 ? `${Math.round((boothTotal / total) * 100)}%` : '0%'
+    rows.push([`#${idx + 1}`, `Booth ${entry.booth}`, ...options.map(o => entry.tally[o] || 0), boothTotal, boothPct])
+  })
+
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `${poll.title.replace(/\s+/g, '_')}_results_${Date.now()}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const RANK_MEDAL = { 0: '🥇', 1: '🥈', 2: '🥉' }
+
 // ── Results panel ─────────────────────────────────────────────────────────────
 
 function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
@@ -183,12 +225,22 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
   // Group by booth
   const byBooth = {}
   responses.forEach(r => {
-    const b = r.boothNo || r['boothNo'] || '—'
+    const b = r.boothNo || '—'
     if (!byBooth[b]) byBooth[b] = {}
     const opt = r.option || r.answer || ''
     byBooth[b][opt] = (byBooth[b][opt] || 0) + 1
   })
 
+  // Sorted high → low by total responses (for ranking table)
+  const boothRanked = Object.entries(byBooth)
+    .map(([booth, tally]) => ({
+      booth,
+      tally,
+      total: Object.values(tally).reduce((s, n) => s + n, 0),
+    }))
+    .sort((a, b) => b.total - a.total)
+
+  // Also sorted by booth number (for raw breakdown table)
   const boothEntries = Object.entries(byBooth).sort((a, b) => Number(a[0]) - Number(b[0]))
 
   return (
@@ -200,6 +252,12 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
           <p className="text-xs text-gray-500 mt-0.5">{total} total responses</p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => exportCSV(poll, responses, options, counts, boothRanked)}
+            title="Export to CSV"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold text-indigo-600 border-indigo-200 hover:bg-indigo-50 transition-colors">
+            <Download size={13} /> Export
+          </button>
           <button onClick={onRefresh} disabled={refreshing}
             className="p-2 rounded-xl border text-gray-500 hover:bg-gray-50 disabled:opacity-50">
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
@@ -234,16 +292,67 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
         })}
       </div>
 
-      {/* Booth-wise breakdown */}
+      {/* Booth performance ranking */}
+      <div className="p-5 border-b">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+          <Trophy size={11} /> Booth Performance Ranking
+        </p>
+        {boothRanked.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-4">No responses yet</p>
+        ) : (
+          <div className="space-y-2">
+            {boothRanked.map((entry, idx) => {
+              const share = total > 0 ? Math.round((entry.total / total) * 100) : 0
+              const leadingOpt = options.reduce((best, o) =>
+                (entry.tally[o] || 0) > (entry.tally[best] || 0) ? o : best, options[0])
+              const leadingColor = COLORS[options.indexOf(leadingOpt) % COLORS.length]
+              return (
+                <div key={entry.booth}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                  style={{ background: idx === 0 ? '#FFFBEB' : idx === 1 ? '#F8FAFF' : idx === 2 ? '#FFF7F1' : '#F9FAFB' }}>
+                  {/* Rank */}
+                  <div className="w-7 text-center flex-shrink-0">
+                    {idx < 3
+                      ? <span className="text-base">{RANK_MEDAL[idx]}</span>
+                      : <span className="text-xs font-black text-gray-400">#{idx + 1}</span>
+                    }
+                  </div>
+                  {/* Booth name */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-gray-800">Booth {entry.booth}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      Leading: <span style={{ color: leadingColor }} className="font-semibold">{leadingOpt}</span>
+                      {' · '}{options.map(o => `${o}: ${entry.tally[o] || 0}`).join('  ')}
+                    </p>
+                  </div>
+                  {/* Bar + count */}
+                  <div className="w-28 flex-shrink-0">
+                    <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                      <span className="font-semibold">{share}% share</span>
+                      <span className="font-black text-gray-800">{entry.total}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full"
+                        style={{ width: `${share}%`, background: leadingColor }} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Booth-wise raw breakdown */}
       <div className="p-5">
         <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">Booth-wise Breakdown</p>
         {boothEntries.length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-4">No responses yet</p>
         ) : (
-          <div className="space-y-0 max-h-72 overflow-y-auto">
+          <div className="max-h-64 overflow-y-auto">
             {/* Header row */}
-            <div className="grid text-[10px] font-semibold text-gray-400 uppercase tracking-wide pb-2 border-b"
-              style={{ gridTemplateColumns: `80px repeat(${options.length}, 1fr) 60px` }}>
+            <div className="grid text-[10px] font-semibold text-gray-400 uppercase tracking-wide pb-2 border-b sticky top-0 bg-white"
+              style={{ gridTemplateColumns: `90px repeat(${options.length}, 1fr) 60px` }}>
               <span>Booth</span>
               {options.map((o, i) => (
                 <span key={o} style={{ color: COLORS[i % COLORS.length] }} className="text-center">{o}</span>
@@ -256,7 +365,7 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
               return (
                 <div key={booth}
                   className="grid items-center py-2.5 border-b border-gray-50 last:border-0"
-                  style={{ gridTemplateColumns: `80px repeat(${options.length}, 1fr) 60px` }}>
+                  style={{ gridTemplateColumns: `90px repeat(${options.length}, 1fr) 60px` }}>
                   <span className="text-xs font-bold text-gray-700">Booth {booth}</span>
                   {options.map((opt, i) => {
                     const n = tally[opt] || 0
@@ -274,7 +383,7 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
 
             {/* Total row */}
             <div className="grid items-center pt-2.5 mt-1 border-t-2 border-gray-200"
-              style={{ gridTemplateColumns: `80px repeat(${options.length}, 1fr) 60px` }}>
+              style={{ gridTemplateColumns: `90px repeat(${options.length}, 1fr) 60px` }}>
               <span className="text-xs font-bold text-gray-900">TOTAL</span>
               {options.map((opt, i) => (
                 <span key={opt} className="text-center text-sm font-black tabular-nums"
