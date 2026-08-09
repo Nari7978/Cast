@@ -9,20 +9,32 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
 
+// Voter field helpers — handles both CSV-style (VOTER_NAME) and camelCase keys
+const vName    = v => v.VOTER_NAME || v.name       || v.voterName  || v.voter_name  || ''
+const vId      = v => v.EPIC_NO    || v.VOTER_ID   || v.epicNo     || v.voterId     || v.voter_id    || ''
+const vAge     = v => v.AGE        || v.age        || ''
+const vGender  = v => v.GENDER     || v.gender     || ''
+const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO    || v.houseNo    || v.house_no    || ''
+
+const GENDER_COLOR = { Male: '#3B82F6', Female: '#EC4899', M: '#3B82F6', F: '#EC4899' }
+
 const VoterCard = memo(function VoterCard({ voter, onPress }) {
-  const initials = (voter.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+  const name     = vName(voter)
+  const initials = name ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() : '?'
+  const gender   = vGender(voter)
+  const gColor   = GENDER_COLOR[gender] || theme.primary
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
-      <View style={[styles.avatar, { backgroundColor: theme.primaryLight }]}>
-        <Text style={styles.avatarText}>{initials}</Text>
+      <View style={[styles.avatar, { backgroundColor: gColor + '18' }]}>
+        <Text style={[styles.avatarText, { color: gColor }]}>{initials}</Text>
       </View>
       <View style={styles.cardInfo}>
-        <Text style={styles.voterName}>{voter.name || '—'}</Text>
+        <Text style={styles.voterName} numberOfLines={1}>{name || '—'}</Text>
         <View style={styles.cardMeta}>
-          <MetaChip icon="card-outline"   text={voter.voterId  || voter.voter_id || '—'} />
-          <MetaChip icon="person-outline" text={`${voter.age || '—'} · ${voter.gender || '—'}`} />
-          <MetaChip icon="home-outline"   text={voter.houseNo  || voter.house_no  || '—'} />
+          <MetaChip icon="card-outline"   text={vId(voter) || '—'} />
+          <MetaChip icon="person-outline" text={[vAge(voter), vGender(voter)].filter(Boolean).join(' · ') || '—'} />
+          <MetaChip icon="home-outline"   text={vHouseNo(voter) || '—'} />
         </View>
       </View>
       <Ionicons name="chevron-forward" size={16} color={theme.border} />

@@ -130,13 +130,7 @@ export default function TasksScreen() {
         overScrollMode="never"
         showsVerticalScrollIndicator={false}
       >
-        {phases.length === 0 ? (
-          <View style={styles.empty}>
-            <Ionicons name="clipboard-outline" size={48} color={theme.border} />
-            <Text style={styles.emptyText}>No phases assigned yet</Text>
-            <Text style={styles.emptySub}>Contact your supervisor to get assigned to a phase.</Text>
-          </View>
-        ) : (
+        {phases.length > 0 ? (
           phases.map(phase => (
             <PhaseCard
               key={phase.id}
@@ -146,6 +140,38 @@ export default function TasksScreen() {
               onPress={() => router.push('/survey/voters')}
             />
           ))
+        ) : activeSurvey ? (
+          <TouchableOpacity
+            style={[styles.card, styles.cardActive]}
+            onPress={() => router.push('/survey/voters')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.activeAccent} />
+            <View style={styles.cardHeader}>
+              <View style={styles.cardLeft}>
+                <View style={[styles.iconWrap, { backgroundColor: theme.primaryLight }]}>
+                  <Ionicons name="clipboard" size={20} color={theme.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.phaseName}>{activeSurvey.name || activeSurvey.title || 'Active Survey'}</Text>
+                  <Text style={styles.surveyName}>Survey in progress</Text>
+                </View>
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: theme.successLight }]}>
+                <Text style={[styles.statusText, { color: theme.success }]}>Active</Text>
+              </View>
+            </View>
+            <View style={styles.ctaRow}>
+              <Text style={styles.ctaText}>Tap to open voter list</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.primary} />
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.empty}>
+            <Ionicons name="clipboard-outline" size={48} color={theme.border} />
+            <Text style={styles.emptyText}>No tasks assigned yet</Text>
+            <Text style={styles.emptySub}>Contact your supervisor to get assigned to a survey.</Text>
+          </View>
         )}
         <View style={{ height: 24 }} />
       </ScrollView>

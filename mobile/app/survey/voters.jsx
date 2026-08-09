@@ -17,9 +17,16 @@ const STATUS_CFG = {
 
 const FILTERS = ['All', 'Pending', 'In Progress', 'Done']
 
+// Field helpers — handles CSV-style (VOTER_NAME) and camelCase keys
+const vName    = v => v.VOTER_NAME || v.name       || v.voterName  || ''
+const vId      = v => v.EPIC_NO    || v.VOTER_ID   || v.epicNo     || v.voterId     || v.voter_id    || ''
+const vAge     = v => v.AGE        || v.age        || ''
+const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO    || v.houseNo    || v.house_no    || ''
+
 const VoterRow = memo(function VoterRow({ voter, status, onPress }) {
-  const cfg     = STATUS_CFG[status] || STATUS_CFG.not_started
-  const initials = (voter.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+  const cfg      = STATUS_CFG[status] || STATUS_CFG.not_started
+  const name     = vName(voter)
+  const initials = name ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() : '?'
 
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.75}>
@@ -27,13 +34,13 @@ const VoterRow = memo(function VoterRow({ voter, status, onPress }) {
         <Text style={[styles.rowAvatarText, { color: status === 'completed' ? theme.success : theme.primary }]}>{initials}</Text>
       </View>
       <View style={styles.rowInfo}>
-        <Text style={styles.rowName}>{voter.name || '—'}</Text>
+        <Text style={styles.rowName} numberOfLines={1}>{name || '—'}</Text>
         <View style={styles.rowMeta}>
-          <Text style={styles.rowMetaText}>{voter.voterId || voter.voter_id || '—'}</Text>
+          <Text style={styles.rowMetaText}>{vId(voter) || '—'}</Text>
           <Text style={styles.rowMetaDot}>·</Text>
-          <Text style={styles.rowMetaText}>{voter.age || '—'} yrs</Text>
+          <Text style={styles.rowMetaText}>{vAge(voter) ? `${vAge(voter)} yrs` : '—'}</Text>
           <Text style={styles.rowMetaDot}>·</Text>
-          <Text style={styles.rowMetaText}>{voter.houseNo || voter.house_no || '—'}</Text>
+          <Text style={styles.rowMetaText}>{vHouseNo(voter) || '—'}</Text>
         </View>
       </View>
       <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
