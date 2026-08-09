@@ -10,11 +10,11 @@ import uuid from 'react-native-uuid'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
 
-const vName    = v => v.VOTER_NAME || v.name      || v.voterName || v.voter_name || ''
-const vId      = v => v.EPIC_NO    || v.VOTER_ID  || v.epicNo    || v.voterId    || v.voter_id   || ''
-const vAge     = v => v.AGE        || v.age        || ''
-const vGender  = v => v.GENDER     || v.gender     || ''
-const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO   || v.houseNo   || v.house_no   || ''
+const vName    = v => v.VOTER_NAME || v.ELECTOR_NAME || v.elector_name || v.name || v.voterName || v.voter_name || ''
+const vId      = v => v.EPIC_NO    || v.VOTER_ID   || v.epicNo     || v.voterId    || v.voter_id   || ''
+const vAge     = v => v.AGE        || v.age         || ''
+const vGender  = v => v.GENDER     || v.SEX         || v.gender     || v.sex        || ''
+const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO     || v.houseNo    || v.house_no   || ''
 
 // ── Question Renderer ────────────────────────────────────────────────────────
 
@@ -128,7 +128,7 @@ function QuestionRenderer({ question, value, onChange }) {
 
 // ── Success Screen ───────────────────────────────────────────────────────────
 
-function SuccessScreen({ onNext, onBack }) {
+function SuccessScreen({ onBack }) {
   return (
     <View style={styles.successWrap}>
       <View style={styles.successIcon}>
@@ -136,10 +136,6 @@ function SuccessScreen({ onNext, onBack }) {
       </View>
       <Text style={styles.successTitle}>Survey Submitted!</Text>
       <Text style={styles.successSub}>Response saved. Will sync automatically when connected.</Text>
-      <TouchableOpacity style={styles.nextBtn} onPress={onNext} activeOpacity={0.85}>
-        <Ionicons name="arrow-forward" size={18} color="#fff" />
-        <Text style={styles.nextBtnText}>Next Voter</Text>
-      </TouchableOpacity>
       <TouchableOpacity style={styles.backListBtn} onPress={onBack} activeOpacity={0.85}>
         <Text style={styles.backListBtnText}>Back to Voter List</Text>
       </TouchableOpacity>
@@ -203,13 +199,6 @@ export default function SurveyScreen() {
     if (currentIndex > 0) setCurrentIndex(i => i - 1)
   }
 
-  const nextVoter = () => {
-    const idx  = voters.findIndex(v => v.id === voterId)
-    const next = voters[idx + 1]
-    if (next) router.replace(`/survey/${next.id}`)
-    else      router.back()
-  }
-
   if (!voter) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -221,7 +210,7 @@ export default function SurveyScreen() {
   if (submitted) {
     return (
       <View style={{ flex: 1, backgroundColor: theme.white, paddingTop: insets.top }}>
-        <SuccessScreen onNext={nextVoter} onBack={() => router.back()} />
+        <SuccessScreen onBack={() => router.back()} />
       </View>
     )
   }
@@ -386,8 +375,6 @@ const styles = StyleSheet.create({
   successIcon:  { marginBottom: 20 },
   successTitle: { fontSize: 24, fontWeight: '800', color: theme.text, marginBottom: 10 },
   successSub:   { fontSize: 14, color: theme.textSub, textAlign: 'center', marginBottom: 36, lineHeight: 22 },
-  nextBtn:      { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primary, borderRadius: theme.radius.lg, paddingHorizontal: 32, paddingVertical: 16, marginBottom: 12, width: '100%', justifyContent: 'center' },
-  nextBtnText:  { color: '#fff', fontSize: 16, fontWeight: '700' },
   backListBtn:  { padding: 16, width: '100%', alignItems: 'center' },
   backListBtnText:{ color: theme.textSub, fontSize: 14, fontWeight: '600' },
 })

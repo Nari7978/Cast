@@ -16,9 +16,9 @@ const STATUS_CFG = {
   Completed: { color: theme.textMuted, bg: '#F1F5F9',           icon: 'checkmark-circle',     label: 'Completed' },
 }
 
-function PhaseCard({ phase, survey, isActive, onPress }) {
+function PhaseCard({ phase, survey, isActive, onPress, completedCount, totalCount }) {
   const cfg = STATUS_CFG[phase.status] || STATUS_CFG.Upcoming
-  const pct = phase.booths ? Math.round(((phase.completedBooths || 0) / phase.booths) * 100) : 0
+  const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
   return (
     <TouchableOpacity
@@ -52,16 +52,10 @@ function PhaseCard({ phase, survey, isActive, onPress }) {
             <View style={[styles.progressFill, { width: `${pct}%` }]} />
           </View>
           <View style={styles.metaRow}>
-            {[
-              { icon: 'location-outline', text: `${phase.booths || 0} Booths` },
-              { icon: 'people-outline',   text: `${phase.agentsAssigned || 0} Agents` },
-              { icon: 'document-text-outline', text: `${phase.responses || 0} Responses` },
-            ].map(({ icon, text }) => (
-              <View key={text} style={styles.metaItem}>
-                <Ionicons name={icon} size={12} color={theme.textSub} />
-                <Text style={styles.metaText}>{text}</Text>
-              </View>
-            ))}
+            <View style={styles.metaItem}>
+              <Ionicons name="document-text-outline" size={12} color={theme.textSub} />
+              <Text style={styles.metaText}>{completedCount}/{totalCount} Responses</Text>
+            </View>
           </View>
           <View style={styles.ctaRow}>
             <Text style={styles.ctaText}>Tap to open voter list</Text>
@@ -85,7 +79,7 @@ function PhaseCard({ phase, survey, isActive, onPress }) {
 export default function TasksScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { agent, activeSurvey, activePhase, setActiveSurvey, setActivePhase } = useStore()
+  const { agent, activeSurvey, activePhase, setActiveSurvey, setActivePhase, pendingResponses, voters } = useStore()
   const [phases,     setPhases]     = useState([])
   const [surveys,    setSurveys]    = useState([])
   const [loading,    setLoading]    = useState(!activeSurvey)
@@ -107,6 +101,9 @@ export default function TasksScreen() {
   useEffect(() => { load(false) }, [])
 
   const getSurvey = (phase) => surveys.find(s => s.id === phase.surveyId) || activeSurvey
+
+  const completedCount = pendingResponses.filter(r => r.submittedAt).length
+  const totalCount     = voters.length
 
   if (loading) {
     return (
@@ -138,6 +135,8 @@ export default function TasksScreen() {
               survey={getSurvey(phase)}
               isActive={phase.status === 'Active'}
               onPress={() => router.push('/survey/voters')}
+              completedCount={completedCount}
+              totalCount={totalCount}
             />
           ))
         ) : activeSurvey ? (
@@ -159,6 +158,12 @@ export default function TasksScreen() {
               </View>
               <View style={[styles.statusBadge, { backgroundColor: theme.successLight }]}>
                 <Text style={[styles.statusText, { color: theme.success }]}>Active</Text>
+              </View>
+            </View>
+            <View style={styles.metaRow}>
+              <View style={styles.metaItem}>
+                <Ionicons name="document-text-outline" size={12} color={theme.textSub} />
+                <Text style={styles.metaText}>{completedCount}/{totalCount} Responses</Text>
               </View>
             </View>
             <View style={styles.ctaRow}>

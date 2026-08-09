@@ -18,10 +18,10 @@ const STATUS_CFG = {
 const FILTERS = ['All', 'Pending', 'In Progress', 'Done']
 
 // Field helpers — handles CSV-style (VOTER_NAME) and camelCase keys
-const vName    = v => v.VOTER_NAME || v.name       || v.voterName  || ''
-const vId      = v => v.EPIC_NO    || v.VOTER_ID   || v.epicNo     || v.voterId     || v.voter_id    || ''
-const vAge     = v => v.AGE        || v.age        || ''
-const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO    || v.houseNo    || v.house_no    || ''
+const vName    = v => v.VOTER_NAME || v.ELECTOR_NAME || v.elector_name || v.name || v.voterName || v.voter_name || ''
+const vId      = v => v.EPIC_NO    || v.VOTER_ID    || v.epicNo       || v.voterId   || v.voter_id   || ''
+const vAge     = v => v.AGE        || v.age          || ''
+const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO      || v.houseNo     || v.house_no  || ''
 
 const VoterRow = memo(function VoterRow({ voter, status, onPress }) {
   const cfg      = STATUS_CFG[status] || STATUS_CFG.not_started
