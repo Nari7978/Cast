@@ -1,184 +1,13 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   Search, FileSpreadsheet, FileText, Eye, X,
   ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   User, MapPin, Calendar, Building2, ClipboardList, MessageSquare,
-  Layers, Activity, CheckCircle2, Hash,
+  Layers, Activity, CheckCircle2, Hash, Loader2,
 } from 'lucide-react'
+import { fetchResponsesData } from '../firebase/responseService'
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const PHASES = [
-  { id: 1, name: 'Door-to-Door Campaign', color: '#5B5CEB' },
-  { id: 2, name: 'Market Survey Drive',   color: '#10B981' },
-  { id: 3, name: 'Village Outreach',      color: '#F59E0B' },
-  { id: 4, name: 'Youth Engagement',      color: '#8B5CF6' },
-]
-
-const SURVEY_FORMS = [
-  {
-    id: 1, name: 'Urban Survey',
-    questions: [
-      { id: 'q1', text: 'Do you support our candidate?' },
-      { id: 'q2', text: 'What is the biggest issue in your area?' },
-      { id: 'q3', text: 'How would you rate current government performance?' },
-      { id: 'q4', text: 'Will you vote in the upcoming election?' },
-      { id: 'q5', text: 'Which party did you vote for last time?' },
-    ],
-  },
-  {
-    id: 2, name: 'Rural Welfare Survey',
-    questions: [
-      { id: 'q1', text: 'Do you have access to clean drinking water?' },
-      { id: 'q2', text: 'Are you satisfied with road conditions?' },
-      { id: 'q3', text: 'Do you receive any government welfare benefits?' },
-      { id: 'q4', text: 'What is your primary source of income?' },
-    ],
-  },
-  {
-    id: 3, name: 'Youth Engagement Survey',
-    questions: [
-      { id: 'q1', text: 'What is your employment status?' },
-      { id: 'q2', text: 'Are you satisfied with local educational institutions?' },
-      { id: 'q3', text: 'Which issue matters most to you?' },
-      { id: 'q4', text: 'Will you encourage your family to vote?' },
-      { id: 'q5', text: 'Rate your confidence in local leadership (1–10)' },
-      { id: 'q6', text: 'Do you trust the electoral process?' },
-    ],
-  },
-  {
-    id: 4, name: 'Infrastructure Feedback',
-    questions: [
-      { id: 'q1', text: 'How satisfied are you with electricity supply?' },
-      { id: 'q2', text: 'How often do you face power cuts per week?' },
-      { id: 'q3', text: 'Is your area connected by proper roads?' },
-      { id: 'q4', text: 'Do you have access to a health centre?' },
-    ],
-  },
-]
-
-const ASSIGNMENTS = [
-  { id: 1, name: 'Phase 1 – Urban Block A', phaseId: 1, formId: 1 },
-  { id: 2, name: 'Phase 1 – Urban Block B', phaseId: 1, formId: 1 },
-  { id: 3, name: 'Phase 1 – Rural North',   phaseId: 1, formId: 2 },
-  { id: 4, name: 'Phase 2 – Market Zone',   phaseId: 2, formId: 4 },
-  { id: 5, name: 'Phase 3 – Village East',  phaseId: 3, formId: 2 },
-  { id: 6, name: 'Phase 4 – Youth Drive',   phaseId: 4, formId: 3 },
-]
-
-const STATIONS = [
-  { id: 1, name: 'Government Inter College' },
-  { id: 2, name: 'Municipal Primary School' },
-  { id: 3, name: 'Gram Panchayat Office' },
-  { id: 4, name: 'Community Hall Block B' },
-  { id: 5, name: 'Rajiv Gandhi School' },
-]
-
-const BOOTHS = Array.from({ length: 30 }, (_, i) => ({
-  id: i + 1,
-  number: `Booth ${i + 1}`,
-  stationId: Math.floor(i / 6) + 1,
-}))
-
-const AGENTS = [
-  'Ramesh Kumar', 'Suresh Patel', 'Anita Sharma', 'Vijay Singh',
-  'Priya Verma', 'Mohan Das', 'Kavita Rao', 'Deepak Nair',
-  'Sunita Gupta', 'Arjun Mehta',
-].map((name, i) => ({ id: i + 1, name, boothId: i * 3 + 1 }))
-
-const VOTER_NAMES = [
-  'Ram Kumar', 'Sita Devi', 'Mohan Lal', 'Geeta Sharma', 'Vijay Yadav',
-  'Priya Singh', 'Ravi Gupta', 'Anita Verma', 'Suresh Patel', 'Kamla Devi',
-  'Rajesh Nair', 'Sunita Rao', 'Dinesh Tiwari', 'Rekha Mishra', 'Arun Joshi',
-  'Pooja Mehta', 'Santosh Kumar', 'Madhuri Das', 'Vinod Sharma', 'Shanti Devi',
-  'Amit Chauhan', 'Neha Pandey', 'Sunil Varma', 'Deepa Reddy', 'Prakash Dubey',
-]
-
-const ANSWER_POOL = {
-  1: [
-    ['Yes', 'No', 'Not Sure', 'Yes', 'No'],
-    ['Roads', 'Water Supply', 'Electricity', 'Employment', 'Education', 'Healthcare'],
-    ['Excellent', 'Good', 'Average', 'Poor', 'Good'],
-    ['Yes', 'No', 'Yes', 'Yes', 'No'],
-    ['BJP', 'Congress', 'SP', 'BSP', 'AAP'],
-  ],
-  2: [
-    ['Yes', 'No', 'Yes', 'Yes', 'No'],
-    ['Yes', 'No', 'Not Sure', 'No', 'Yes'],
-    ['Yes', 'No', 'Yes', 'No', 'Yes'],
-    ['Agriculture', 'Labour', 'Business', 'Government Job', 'Private Job'],
-  ],
-  3: [
-    ['Employed', 'Unemployed', 'Student', 'Self-Employed', 'Employed'],
-    ['Yes', 'No', 'Not Sure', 'Yes', 'No'],
-    ['Employment', 'Education', 'Healthcare', 'Roads', 'Water Supply'],
-    ['Yes', 'No', 'Yes', 'Yes', 'No'],
-    ['7', '8', '6', '9', '5'],
-    ['Yes', 'No', 'Yes', 'Yes', 'No'],
-  ],
-  4: [
-    ['Good', 'Poor', 'Average', 'Excellent', 'Poor'],
-    ['1-2', '3-5', '0', '5+', '1-2'],
-    ['Yes', 'No', 'Yes', 'Yes', 'No'],
-    ['Yes', 'No', 'Yes', 'No', 'Yes'],
-  ],
-}
-
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-const EPIC_PREFIXES = ['ABC','DEF','GHJ','KLM','PQR']
-const GENDERS = ['Male', 'Female', 'Male', 'Male', 'Female']
-
-function generateResponses() {
-  const base = new Date('2026-05-16')
-  return Array.from({ length: 75 }, (_, i) => {
-    const assignment = ASSIGNMENTS[i % ASSIGNMENTS.length]
-    const phase = PHASES.find(p => p.id === assignment.phaseId)
-    const form = SURVEY_FORMS.find(f => f.id === assignment.formId)
-    const booth = BOOTHS[i % BOOTHS.length]
-    const station = STATIONS.find(s => s.id === booth.stationId)
-    const agent = AGENTS[i % AGENTS.length]
-
-    const d = new Date(base)
-    d.setDate(d.getDate() - Math.floor(i / 10))
-    const hours = 8 + (i % 10)
-    const mins = (i * 7) % 60
-    const h12 = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
-    const period = hours < 12 ? 'AM' : 'PM'
-    const dateLabel = `${String(d.getDate()).padStart(2,'0')} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
-    const timeLabel = `${String(h12).padStart(2,'0')}:${String(mins).padStart(2,'0')} ${period}`
-
-    const answers = form.questions.map((q, qi) => {
-      const pool = ANSWER_POOL[form.id]?.[qi] ?? ['N/A']
-      return { questionText: q.text, answer: pool[i % pool.length] }
-    })
-
-    return {
-      id: `RESP-${String(i + 1).padStart(6, '0')}`,
-      epicNo: `${EPIC_PREFIXES[i % 5]}${String(1234567 + i).padStart(7, '0')}`,
-      voterName: VOTER_NAMES[i % VOTER_NAMES.length],
-      age: 20 + (i % 60),
-      gender: GENDERS[i % 5],
-      mobile: `${7000000000 + i * 9973}`,
-      boothId: booth.id,
-      boothNumber: booth.number,
-      stationId: station.id,
-      stationName: station.name,
-      agentId: agent.id,
-      agentName: agent.name,
-      phaseId: phase.id,
-      phaseName: phase.name,
-      assignmentId: assignment.id,
-      assignmentName: assignment.name,
-      formId: form.id,
-      formName: form.name,
-      submittedOn: `${dateLabel} ${timeLabel}`,
-      submittedDate: d.toISOString(),
-      answers,
-    }
-  })
-}
-
-const ALL_RESPONSES = generateResponses()
+const PHASE_COLORS = ['#5B5CEB','#10B981','#F59E0B','#8B5CF6','#EF4444','#3B82F6','#EC4899']
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -341,82 +170,110 @@ function Drawer({ response, onClose }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Responses() {
-  const [search, setSearch]               = useState('')
-  const [filterPhase, setFilterPhase]     = useState('')
-  const [filterForm, setFilterForm]       = useState('')
-  const [filterAssign, setFilterAssign]   = useState('')
+  const [allResponses,    setAllResponses]    = useState([])
+  const [phases,          setPhases]          = useState([])
+  const [surveys,         setSurveys]         = useState([])
+  const [agents,          setAgents]          = useState([])
+  const [booths,          setBooths]          = useState([])
+  const [uniqueStations,  setUniqueStations]  = useState([])
+  const [loading,         setLoading]         = useState(true)
+
+  const [search,        setSearch]        = useState('')
+  const [filterPhase,   setFilterPhase]   = useState('')
+  const [filterForm,    setFilterForm]    = useState('')
   const [filterStation, setFilterStation] = useState('')
-  const [filterBooth, setFilterBooth]     = useState('')
-  const [filterAgent, setFilterAgent]     = useState('')
-  const [dateFrom, setDateFrom]           = useState('')
-  const [dateTo, setDateTo]               = useState('')
-  const [page, setPage]                   = useState(1)
-  const [selected, setSelected]           = useState(null)
+  const [filterBooth,   setFilterBooth]   = useState('')
+  const [filterAgent,   setFilterAgent]   = useState('')
+  const [dateFrom,      setDateFrom]      = useState('')
+  const [dateTo,        setDateTo]        = useState('')
+  const [page,          setPage]          = useState(1)
+  const [selected,      setSelected]      = useState(null)
+
+  useEffect(() => {
+    fetchResponsesData()
+      .then(d => {
+        setAllResponses(d.responses)
+        setPhases(d.phases)
+        setSurveys(d.surveys)
+        setAgents(d.agents)
+        setBooths(d.booths)
+        setUniqueStations(d.uniqueStations)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   const availableBooths = useMemo(() =>
-    filterStation
-      ? BOOTHS.filter(b => b.stationId === Number(filterStation))
-      : BOOTHS,
-  [filterStation])
-
-  const availableAssignments = useMemo(() =>
-    filterPhase
-      ? ASSIGNMENTS.filter(a => a.phaseId === Number(filterPhase))
-      : ASSIGNMENTS,
-  [filterPhase])
+    filterStation ? booths.filter(b => b.pollingStation === filterStation) : booths,
+  [filterStation, booths])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    return ALL_RESPONSES.filter(r => {
+    return allResponses.filter(r => {
       if (q && ![r.id, r.epicNo, r.voterName, r.boothNumber, r.agentName]
-        .some(v => v.toLowerCase().includes(q))) return false
-      if (filterPhase   && r.phaseId      !== Number(filterPhase))   return false
-      if (filterForm    && r.formId       !== Number(filterForm))     return false
-      if (filterAssign  && r.assignmentId !== Number(filterAssign))   return false
-      if (filterStation && r.stationId    !== Number(filterStation))  return false
-      if (filterBooth   && r.boothId      !== Number(filterBooth))    return false
-      if (filterAgent   && r.agentId      !== Number(filterAgent))    return false
+        .some(v => String(v).toLowerCase().includes(q))) return false
+      if (filterPhase   && r.phaseId   !== filterPhase)   return false
+      if (filterForm    && r.surveyId  !== filterForm)     return false
+      if (filterStation && r.stationName !== filterStation) return false
+      if (filterBooth   && r.boothNo   !== filterBooth)   return false
+      if (filterAgent   && r.agentName !== filterAgent)   return false
       if (dateFrom) {
-        const from = new Date(dateFrom)
-        if (new Date(r.submittedDate) < from) return false
+        if (!r.submittedDate || new Date(r.submittedDate) < new Date(dateFrom)) return false
       }
       if (dateTo) {
         const to = new Date(dateTo)
         to.setHours(23, 59, 59, 999)
-        if (new Date(r.submittedDate) > to) return false
+        if (!r.submittedDate || new Date(r.submittedDate) > to) return false
       }
       return true
     })
-  }, [search, filterPhase, filterForm, filterAssign, filterStation, filterBooth, filterAgent, dateFrom, dateTo])
+  }, [allResponses, search, filterPhase, filterForm, filterStation, filterBooth, filterAgent, dateFrom, dateTo])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
   const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   const resetFilters = () => {
-    setSearch(''); setFilterPhase(''); setFilterForm(''); setFilterAssign('')
+    setSearch(''); setFilterPhase(''); setFilterForm('')
     setFilterStation(''); setFilterBooth(''); setFilterAgent('')
     setDateFrom(''); setDateTo(''); setPage(1)
   }
-  const hasFilters = search || filterPhase || filterForm || filterAssign ||
+  const hasFilters = search || filterPhase || filterForm ||
     filterStation || filterBooth || filterAgent || dateFrom || dateTo
 
   function handleExportFiltered() {
-    const namePart = filterPhase
-      ? slug(PHASES.find(p => p.id === Number(filterPhase))?.name ?? 'Filtered')
-      : 'Filtered'
+    const phase = phases.find(p => p.id === filterPhase)
+    const namePart = phase ? slug(phase.name) : 'Filtered'
     downloadCSV(buildCSV(filtered), `${namePart}_Survey_Responses.csv`)
   }
 
   function handleExportAll() {
-    downloadCSV(buildCSV(ALL_RESPONSES), 'All_Survey_Responses.csv')
+    downloadCSV(buildCSV(allResponses), 'All_Survey_Responses.csv')
   }
 
   const goPage = n => setPage(Math.max(1, Math.min(totalPages, n)))
 
+  const todayStr        = new Date().toDateString()
+  const todayCount      = allResponses.filter(r => r.submittedDate && new Date(r.submittedDate).toDateString() === todayStr).length
   const activePhaseName = filterPhase
-    ? PHASES.find(p => p.id === Number(filterPhase))?.name
-    : 'Door-to-Door Campaign'
+    ? phases.find(p => p.id === filterPhase)?.name
+    : phases.find(p => p.status === 'Active')?.name || (phases[0]?.name ?? '—')
+  const activeSurveyCount = surveys.filter(s => s.status === 'Active').length || surveys.length
+
+  const phaseColorMap = useMemo(() => {
+    const m = {}
+    phases.forEach((p, i) => { m[p.id] = PHASE_COLORS[i % PHASE_COLORS.length] })
+    return m
+  }, [phases])
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <Loader2 size={28} className="animate-spin" style={{ color: '#5B5CEB' }} />
+        <p className="text-sm" style={{ color: '#64748B' }}>Loading responses...</p>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -433,10 +290,10 @@ export default function Responses() {
         {/* ── Summary Cards ── */}
         <div className="grid grid-cols-4 gap-4">
           {[
-            { icon: MessageSquare, label: 'Total Responses',  value: '85,642',               color: '#5B5CEB', bg: '#EEF2FF' },
-            { icon: Activity,      label: 'Responses Today',  value: '3,256',                color: '#10B981', bg: '#ECFDF5' },
-            { icon: Layers,        label: 'Campaign Phase',   value: activePhaseName,         color: '#F59E0B', bg: '#FFFBEB', small: true },
-            { icon: ClipboardList, label: 'Survey Forms',     value: '4 Active',             color: '#8B5CF6', bg: '#F5F3FF' },
+            { icon: MessageSquare, label: 'Total Responses',  value: allResponses.length.toLocaleString(), color: '#5B5CEB', bg: '#EEF2FF' },
+            { icon: Activity,      label: 'Responses Today',  value: todayCount.toLocaleString(),          color: '#10B981', bg: '#ECFDF5' },
+            { icon: Layers,        label: 'Campaign Phase',   value: activePhaseName,                       color: '#F59E0B', bg: '#FFFBEB', small: true },
+            { icon: ClipboardList, label: 'Survey Forms',     value: `${activeSurveyCount} Active`,         color: '#8B5CF6', bg: '#F5F3FF' },
           ].map(({ icon: Icon, label, value, color, bg, small }) => (
             <div key={label} className="rounded-2xl p-5 bg-white" style={{ border: '1px solid #F1F5F9', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               <div className="flex items-start justify-between mb-3">
@@ -482,28 +339,24 @@ export default function Responses() {
 
         {/* ── Filter Row ── */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <SelectFilter value={filterPhase} onChange={v => { setFilterPhase(v); setFilterAssign(''); setPage(1) }} placeholder="Campaign Phase">
-            {PHASES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          <SelectFilter value={filterPhase} onChange={v => { setFilterPhase(v); setPage(1) }} placeholder="Campaign Phase">
+            {phases.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </SelectFilter>
 
           <SelectFilter value={filterForm} onChange={v => { setFilterForm(v); setPage(1) }} placeholder="Survey Form">
-            {SURVEY_FORMS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </SelectFilter>
-
-          <SelectFilter value={filterAssign} onChange={v => { setFilterAssign(v); setPage(1) }} placeholder="Survey Assignment">
-            {availableAssignments.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            {surveys.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
           </SelectFilter>
 
           <SelectFilter value={filterStation} onChange={v => { setFilterStation(v); setFilterBooth(''); setPage(1) }} placeholder="Polling Station">
-            {STATIONS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {uniqueStations.map(s => <option key={s} value={s}>{s}</option>)}
           </SelectFilter>
 
           <SelectFilter value={filterBooth} onChange={v => { setFilterBooth(v); setPage(1) }} placeholder="Booth">
-            {availableBooths.map(b => <option key={b.id} value={b.id}>{b.number}</option>)}
+            {availableBooths.map(b => <option key={b.boothNo} value={b.boothNo}>Booth {b.boothNo}</option>)}
           </SelectFilter>
 
           <SelectFilter value={filterAgent} onChange={v => { setFilterAgent(v); setPage(1) }} placeholder="Booth Agent">
-            {AGENTS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            {agents.map(a => <option key={a} value={a}>{a}</option>)}
           </SelectFilter>
 
           <div className="flex items-center gap-1.5">
@@ -571,7 +424,7 @@ export default function Responses() {
                 </thead>
                 <tbody>
                   {paginated.map((r, idx) => (
-                    <TableRow key={r.id} r={r} idx={idx} onView={() => setSelected(r)} />
+                    <TableRow key={r.id} r={r} idx={idx} onView={() => setSelected(r)} phaseColorMap={phaseColorMap} />
                   ))}
                 </tbody>
               </table>
@@ -608,10 +461,10 @@ export default function Responses() {
 
 // ─── Table Row ────────────────────────────────────────────────────────────────
 
-function TableRow({ r, idx, onView }) {
+function TableRow({ r, idx, onView, phaseColorMap }) {
   const [hover, setHover] = useState(false)
 
-  const phaseColor = PHASES.find(p => p.id === r.phaseId)?.color ?? '#5B5CEB'
+  const phaseColor = phaseColorMap?.[r.phaseId] ?? '#5B5CEB'
 
   return (
     <tr
