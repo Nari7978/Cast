@@ -62,10 +62,10 @@ export default function VotersScreen() {
     if (!search) return voters
     const q = search.toLowerCase()
     return voters.filter(v =>
-      (v.name || '').toLowerCase().includes(q)
-      || (v.voterId || v.voter_id || '').toLowerCase().includes(q)
-      || (v.houseNo || v.house_no || '').toLowerCase().includes(q)
-      || (v.mobile  || '').includes(q)
+      vName(v).toLowerCase().includes(q)
+      || vId(v).toLowerCase().includes(q)
+      || vHouseNo(v).toLowerCase().includes(q)
+      || (v.mobile || '').includes(q)
     )
   }, [voters, search])
 

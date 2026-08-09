@@ -75,9 +75,9 @@ export default function SurveyVotersScreen() {
     return voters.filter(v => {
       const status = getStatus(responses, v.id)
       const matchQ = !q
-        || (v.name || '').toLowerCase().includes(q)
-        || (v.voterId || v.voter_id || '').toLowerCase().includes(q)
-        || (v.houseNo || v.house_no || '').toLowerCase().includes(q)
+        || vName(v).toLowerCase().includes(q)
+        || vId(v).toLowerCase().includes(q)
+        || vHouseNo(v).toLowerCase().includes(q)
         || (v.mobile || '').includes(q)
       const matchF =
         activeFilter === 'All'         ? true :

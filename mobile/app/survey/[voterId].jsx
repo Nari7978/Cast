@@ -9,6 +9,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
 
+const vName    = v => v.VOTER_NAME || v.name      || v.voterName || v.voter_name || ''
+const vId      = v => v.EPIC_NO    || v.VOTER_ID  || v.epicNo    || v.voterId    || v.voter_id   || ''
+const vAge     = v => v.AGE        || v.age        || ''
+const vGender  = v => v.GENDER     || v.gender     || ''
+const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO   || v.houseNo   || v.house_no   || ''
+
 // ── Question Renderer ────────────────────────────────────────────────────────
 
 function SingleChoice({ question, value, onChange }) {
@@ -244,19 +250,19 @@ export default function SurveyScreen() {
             <View style={styles.voterCardLeft}>
               <View style={styles.voterAvatar}>
                 <Text style={styles.voterAvatarText}>
-                  {(voter.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
+                  {(vName(voter) || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
                 </Text>
               </View>
               <View>
-                <Text style={styles.voterName}>{voter.name || '—'}</Text>
+                <Text style={styles.voterName}>{vName(voter) || '—'}</Text>
                 <View style={styles.voterMeta}>
-                  <Text style={styles.voterMetaText}>{voter.voterId || voter.voter_id || '—'}</Text>
+                  <Text style={styles.voterMetaText}>{vId(voter) || '—'}</Text>
                   <Text style={styles.voterMetaDot}>·</Text>
-                  <Text style={styles.voterMetaText}>{voter.age || '—'} yrs · {voter.gender || '—'}</Text>
+                  <Text style={styles.voterMetaText}>{vAge(voter) ? `${vAge(voter)} yrs` : '—'} · {vGender(voter) || '—'}</Text>
                 </View>
                 <View style={styles.voterMeta}>
                   <Ionicons name="home-outline" size={11} color={theme.textMuted} />
-                  <Text style={styles.voterMetaText}>{voter.houseNo || voter.house_no || '—'}</Text>
+                  <Text style={styles.voterMetaText}>{vHouseNo(voter) || '—'}</Text>
                 </View>
               </View>
             </View>
