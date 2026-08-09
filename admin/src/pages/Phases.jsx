@@ -8,7 +8,7 @@ import {
   Target, TrendingUp, Activity, Layers,
 } from 'lucide-react'
 
-import { subscribePhases, createPhase, updatePhase } from '../firebase/phaseService'
+import { subscribePhases, createPhase, updatePhase, deletePhase } from '../firebase/phaseService'
 
 const STATUS_CONFIG = {
   Active:    { color: '#10B981', bg: '#ECFDF5', icon: Activity,      label: 'Active'    },
@@ -51,6 +51,7 @@ export default function Phases() {
   const [formErrors, setFormErrors]     = useState({})
   const [showBoothDialog, setShowBoothDialog] = useState(false)
   const [boothSearch, setBoothSearch]         = useState('')
+  const [confirmDelete, setConfirmDelete]     = useState(null)  // phase to delete
 
   useEffect(() => subscribePhases(data => setPhases(data)), [])
 
@@ -111,6 +112,12 @@ export default function Phases() {
 
   async function archivePhase(phase) {
     await updatePhase(phase.id, { status: 'Archived' })
+  }
+
+  async function handleDelete(phase) {
+    await deletePhase(phase.id)
+    setConfirmDelete(null)
+    if (drawerPhase?.id === phase.id) setDrawerPhase(null)
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -283,6 +290,7 @@ export default function Phases() {
                         {phase.status !== 'Archived' && (
                           <button onClick={() => archivePhase(phase)} title="Archive" className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors"><Archive size={14} /></button>
                         )}
+                        <button onClick={() => setConfirmDelete(phase)} title="Delete" className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -484,6 +492,10 @@ export default function Phases() {
                     <Archive size={14} />
                   </button>
                 )}
+                <button onClick={() => setConfirmDelete(drawerPhase)}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-100 text-red-500 text-[13px] font-medium hover:bg-red-50 transition-colors">
+                  <Trash2 size={14} />
+                </button>
               </div>
             </div>
           </div>
@@ -533,6 +545,37 @@ export default function Phases() {
             <div className="px-5 py-4 border-t border-[#E8ECF4] flex gap-2 flex-shrink-0">
               <button onClick={() => setShowBoothDialog(false)} className="flex-1 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">Cancel</button>
               <button onClick={() => setShowBoothDialog(false)} className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity" style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)' }}>Save Assignment</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────── Delete Confirmation ─────────────────── */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }}>
+          <div className="bg-white rounded-2xl border border-[#E8ECF4] w-[400px] p-6" style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.18)' }}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#FEF2F2' }}>
+                <Trash2 size={18} style={{ color: '#EF4444' }} />
+              </div>
+              <div>
+                <p className="text-slate-800 font-bold text-[15px]">Delete Phase</p>
+                <p className="text-slate-400 text-[12px] mt-0.5">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-slate-600 text-[13px] mb-5">
+              Are you sure you want to delete <span className="font-semibold text-slate-800">"{confirmDelete.name}"</span>? All associated data will be permanently removed.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => handleDelete(confirmDelete)}
+                className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
+                style={{ background: '#EF4444' }}>
+                Delete Phase
+              </button>
             </div>
           </div>
         </div>

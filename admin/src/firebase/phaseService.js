@@ -47,3 +47,8 @@ export async function updatePhase(id, data) {
   const { error } = await supabase.rpc('update_doc', { tbl: COL, doc_id: id, patch: data })
   if (error) throw error
 }
+
+export async function deletePhase(id) {
+  const { error } = await supabase.from(COL).delete().eq('id', id)
+  if (error) throw error
+}
