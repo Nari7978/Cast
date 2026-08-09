@@ -140,8 +140,6 @@ function PendingWork({ stats }) {
 function Notifications() {
   const notifications = [
     { icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2', text: 'No response data collected yet',  tag: 'Info' },
-    { icon: Clock,         color: '#F59E0B', bg: '#FFFBEB', text: 'Set up mobile agents to start collecting', tag: 'Notice' },
-    { icon: AlertCircle,   color: '#06B6D4', bg: '#ECFEFF', text: 'Add booth agents for assignment', tag: 'Notice' },
   ]
   const tagColors = { Critical: '#EF4444', Warning: '#F59E0B', Info: '#8B5CF6', Notice: '#06B6D4' }
   return (
