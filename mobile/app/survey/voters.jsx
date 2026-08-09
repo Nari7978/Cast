@@ -24,15 +24,11 @@ const vAge     = v => v.AGE        || v.age          || ''
 const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO      || v.houseNo     || v.house_no  || ''
 
 const VoterRow = memo(function VoterRow({ voter, status, onPress }) {
-  const cfg      = STATUS_CFG[status] || STATUS_CFG.not_started
-  const name     = vName(voter)
-  const initials = name ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() : '?'
+  const cfg  = STATUS_CFG[status] || STATUS_CFG.not_started
+  const name = vName(voter)
 
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.75}>
-      <View style={[styles.rowAvatar, { backgroundColor: status === 'completed' ? theme.successLight : theme.primaryLight }]}>
-        <Text style={[styles.rowAvatarText, { color: status === 'completed' ? theme.success : theme.primary }]}>{initials}</Text>
-      </View>
       <View style={styles.rowInfo}>
         <Text style={styles.rowName} numberOfLines={1}>{name || '—'}</Text>
         <View style={styles.rowMeta}>
@@ -202,8 +198,6 @@ const styles = StyleSheet.create({
     padding: 14, marginBottom: 8, ...theme.shadowSm,
     borderWidth: 1, borderColor: theme.border,
   },
-  rowAvatar:     { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-  rowAvatarText: { fontSize: 14, fontWeight: '800' },
   rowInfo:       { flex: 1 },
   rowName:       { fontSize: 14, fontWeight: '700', color: theme.text, marginBottom: 4 },
   rowMeta:       { flexDirection: 'row', alignItems: 'center', gap: 6 },

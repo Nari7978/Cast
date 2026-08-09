@@ -115,14 +115,66 @@ function NumberAnswer({ question, value, onChange }) {
   )
 }
 
+function YesNo({ value, onChange }) {
+  return (
+    <View style={styles.optionsWrap}>
+      {['Yes', 'No'].map(opt => {
+        const selected = value === opt
+        return (
+          <TouchableOpacity
+            key={opt}
+            style={[styles.optionBtn, selected && styles.optionBtnSelected]}
+            onPress={() => onChange(selected ? '' : opt)}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.optionCircle, selected && styles.optionCircleSelected]}>
+              {selected && <View style={styles.optionDot} />}
+            </View>
+            <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{opt}</Text>
+          </TouchableOpacity>
+        )
+      })}
+    </View>
+  )
+}
+
+function RatingAnswer({ value, onChange }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      {[1, 2, 3, 4, 5].map(n => (
+        <TouchableOpacity key={n} onPress={() => onChange(String(n))} activeOpacity={0.7}
+          style={{ width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: Number(value) >= n ? theme.primary : theme.background,
+            borderWidth: 1.5, borderColor: Number(value) >= n ? theme.primary : theme.border }}>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: Number(value) >= n ? '#fff' : theme.textSub }}>{n}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  )
+}
+
 function QuestionRenderer({ question, value, onChange }) {
   switch (question.type) {
-    case 'single':   return <SingleChoice   question={question} value={value} onChange={onChange} />
-    case 'multiple': return <MultiChoice    question={question} value={value} onChange={onChange} />
-    case 'dropdown': return <DropdownChoice question={question} value={value} onChange={onChange} />
-    case 'number':   return <NumberAnswer   question={question} value={value} onChange={onChange} />
-    case 'long':     return <TextAnswer     question={question} value={value} onChange={onChange} multiline />
-    default:         return <TextAnswer     question={question} value={value} onChange={onChange} />
+    // Admin builder types
+    case 'single_choice':   return <SingleChoice   question={question} value={value} onChange={onChange} />
+    case 'multiple_choice': return <MultiChoice    question={question} value={value} onChange={onChange} />
+    case 'checkbox':        return <MultiChoice    question={question} value={value} onChange={onChange} />
+    case 'dropdown':        return <DropdownChoice question={question} value={value} onChange={onChange} />
+    case 'yes_no':          return <YesNo          value={value} onChange={onChange} />
+    case 'rating':          return <RatingAnswer   value={value} onChange={onChange} />
+    case 'long_text':       return <TextAnswer     question={question} value={value} onChange={onChange} multiline />
+    case 'number':          return <NumberAnswer   question={question} value={value} onChange={onChange} />
+    case 'mobile':          return <NumberAnswer   question={question} value={value} onChange={onChange} />
+    case 'short_text':
+    case 'text':
+    case 'email':
+    case 'date':
+    case 'time':            return <TextAnswer     question={question} value={value} onChange={onChange} />
+    // Legacy types
+    case 'single':          return <SingleChoice   question={question} value={value} onChange={onChange} />
+    case 'multiple':        return <MultiChoice    question={question} value={value} onChange={onChange} />
+    case 'long':            return <TextAnswer     question={question} value={value} onChange={onChange} multiline />
+    default:                return <TextAnswer     question={question} value={value} onChange={onChange} />
   }
 }
 
