@@ -83,7 +83,7 @@ export function stopRealtimeSync() {
   }
 }
 
-async function syncPending() {
+export async function syncPending() {
   if (syncing) return
   syncing = true
   try {

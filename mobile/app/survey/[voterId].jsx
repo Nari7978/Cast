@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import uuid from 'react-native-uuid'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
+import { syncPending } from '../../src/services/sync'
 
 const vName    = v => v.VOTER_NAME || v.ELECTOR_NAME || v.elector_name || v.name || v.voterName || v.voter_name || ''
 const vId      = v => v.EPIC_NO    || v.VOTER_ID   || v.epicNo     || v.voterId    || v.voter_id   || ''
@@ -241,6 +242,7 @@ export default function SurveyScreen() {
     }
     await saveResponse(response)
     setSubmitted(true)
+    syncPending().catch(() => {})
   }
 
   const goNext = () => {
