@@ -8,9 +8,10 @@ import {
 
 import { subscribeAgents, createAgent, updateAgent, deleteAgent as deleteAgentSvc } from '../firebase/agentService'
 import { fetchAllBooths } from '../firebase/voterService'
+import { subscribePhases } from '../firebase/phaseService'
 
 const generatePIN = () => String(Math.floor(1000 + Math.random() * 9000))
-const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', boothNo: '', status: 'Active', notes: '', pin: generatePIN() }
+const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', boothNo: '', phaseId: '', status: 'Active', notes: '', pin: generatePIN() }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -105,7 +106,8 @@ function PINDisplay({ pin }) {
   )
 }
 
-function AgentDrawer({ agent, onClose, onEdit }) {
+function AgentDrawer({ agent, phases, onClose, onEdit }) {
+  const phaseName = phases?.find(p => p.id === agent.phaseId)?.name || agent.phaseId || '—'
   return (
     <>
       <div className="fixed inset-0 bg-black/25 z-40 backdrop-blur-[2px]" onClick={onClose} />
@@ -152,6 +154,7 @@ function AgentDrawer({ agent, onClose, onEdit }) {
           <div className="bg-slate-50 rounded-2xl p-4">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-3">Assignment</p>
             <div className="space-y-0">
+              <Field label="Phase"           value={phaseName} />
               <Field label="Booth"           value={`Booth ${agent.boothNo}`} />
               <Field label="Polling Station" value={agent.station} />
             </div>
@@ -186,11 +189,12 @@ function AgentDrawer({ agent, onClose, onEdit }) {
 
 // ── Agent Form Modal ──────────────────────────────────────────────────────────
 
-function AgentForm({ editingAgent, agents, booths, onClose, onSave }) {
+function AgentForm({ editingAgent, agents, booths, phases, onClose, onSave }) {
   const [form, setForm] = useState(editingAgent
     ? { name: editingAgent.name, mobile: editingAgent.mobile, email: editingAgent.email,
         gender: editingAgent.gender,
         boothNo: editingAgent.boothNo || '',
+        phaseId: editingAgent.phaseId || '',
         status: editingAgent.status, notes: editingAgent.notes || '',
         pin: editingAgent.pin || generatePIN() }
     : { ...EMPTY_FORM, pin: generatePIN() })
@@ -267,12 +271,23 @@ function AgentForm({ editingAgent, agents, booths, onClose, onSave }) {
               </div>
             </div>
 
-            {/* Gender */}
-            <div>
-              <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Gender</label>
-              <select value={form.gender} onChange={e => set('gender', e.target.value)} className={inputCls(false)}>
-                {['Male', 'Female', 'Other'].map(g => <option key={g}>{g}</option>)}
-              </select>
+            {/* Gender + Phase */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Gender</label>
+                <select value={form.gender} onChange={e => set('gender', e.target.value)} className={inputCls(false)}>
+                  {['Male', 'Female', 'Other'].map(g => <option key={g}>{g}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Phase</label>
+                <select value={form.phaseId} onChange={e => set('phaseId', e.target.value)} className={inputCls(false)}>
+                  <option value="">Select phase...</option>
+                  {phases.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Booth (select first → Polling Station auto-fills) */}
@@ -363,6 +378,7 @@ const PAGE_SIZE = 10
 export default function BoothAgents() {
   const [agents,        setAgents]        = useState([])
   const [booths,        setBooths]        = useState([])
+  const [phases,        setPhases]        = useState([])
   const [search,        setSearch]        = useState('')
   const [stationFilter, setStationFilter] = useState('All')
   const [statusFilter,  setStatusFilter]  = useState('All')
@@ -379,6 +395,8 @@ export default function BoothAgents() {
   useEffect(() => {
     fetchAllBooths(setBooths).then(setBooths).catch(() => {})
   }, [])
+
+  useEffect(() => subscribePhases(setPhases, () => {}), [])
 
   const uniqueStations = useMemo(() =>
     ['All', ...[...new Set(booths.map(b => b.pollingStation).filter(Boolean))].sort()],
@@ -621,12 +639,12 @@ export default function BoothAgents() {
 
       {/* ── Drawer ──────────────────────────────────────────────────────────── */}
       {drawerAgent && (
-        <AgentDrawer agent={drawerAgent} onClose={() => setDrawerAgent(null)} onEdit={openEdit} />
+        <AgentDrawer agent={drawerAgent} phases={phases} onClose={() => setDrawerAgent(null)} onEdit={openEdit} />
       )}
 
       {/* ── Form Modal ──────────────────────────────────────────────────────── */}
       {showForm && (
-        <AgentForm editingAgent={editingAgent} agents={agents} booths={booths} onClose={() => setShowForm(false)} onSave={handleSave} />
+        <AgentForm editingAgent={editingAgent} agents={agents} booths={booths} phases={phases} onClose={() => setShowForm(false)} onSave={handleSave} />
       )}
     </div>
   )
