@@ -6,6 +6,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import uuid from 'react-native-uuid'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
 
@@ -182,7 +183,7 @@ export default function SurveyScreen() {
 
   const handleSubmit = async () => {
     const response = {
-      localId:     `local_${Date.now()}`,
+      localId:     uuid.v4(),
       voterId,
       surveyId:    activeSurvey?.id,
       boothNo:     voter?.boothNo,

@@ -177,6 +177,7 @@ export default function Responses() {
   const [booths,          setBooths]          = useState([])
   const [uniqueStations,  setUniqueStations]  = useState([])
   const [loading,         setLoading]         = useState(true)
+  const [fetchError,      setFetchError]      = useState(null)
 
   const [search,        setSearch]        = useState('')
   const [filterPhase,   setFilterPhase]   = useState('')
@@ -199,7 +200,7 @@ export default function Responses() {
         setBooths(d.booths)
         setUniqueStations(d.uniqueStations)
       })
-      .catch(() => {})
+      .catch(err => setFetchError(err?.message || 'Failed to load responses'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -271,6 +272,25 @@ export default function Responses() {
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <Loader2 size={28} className="animate-spin" style={{ color: '#5B5CEB' }} />
         <p className="text-sm" style={{ color: '#64748B' }}>Loading responses...</p>
+      </div>
+    )
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: '#FEF2F2' }}>
+          <X size={22} style={{ color: '#EF4444' }} />
+        </div>
+        <p className="font-semibold text-base" style={{ color: '#1E293B' }}>Failed to load responses</p>
+        <p className="text-sm" style={{ color: '#94A3B8' }}>{fetchError}</p>
+        <button
+          onClick={() => { setFetchError(null); setLoading(true); fetchResponsesData().then(d => { setAllResponses(d.responses); setPhases(d.phases); setSurveys(d.surveys); setAgents(d.agents); setBooths(d.booths); setUniqueStations(d.uniqueStations) }).catch(err => setFetchError(err?.message || 'Failed to load responses')).finally(() => setLoading(false)) }}
+          className="px-4 py-2 rounded-xl text-sm font-medium hover:opacity-90"
+          style={{ background: '#5B5CEB', color: '#fff' }}
+        >
+          Retry
+        </button>
       </div>
     )
   }
