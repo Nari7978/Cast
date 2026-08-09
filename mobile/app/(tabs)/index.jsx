@@ -67,8 +67,8 @@ export default function HomeScreen() {
   const pct       = total ? Math.round((completed / total) * 100) : 0
 
   const vGender = v => v.GENDER || v.gender || ''
-  const maleCount   = voters.filter(v => { const g = vGender(v); return g === 'Male'   || g === 'M' }).length
-  const femaleCount = voters.filter(v => { const g = vGender(v); return g === 'Female' || g === 'F' }).length
+  const maleCount   = voters.filter(v => { const g = vGender(v).toUpperCase(); return g === 'MALE'   || g === 'M' }).length
+  const femaleCount = voters.filter(v => { const g = vGender(v).toUpperCase(); return g === 'FEMALE' || g === 'F' }).length
   const otherCount  = total - maleCount - femaleCount
 
   const todayStr  = new Date().toDateString()

@@ -16,7 +16,7 @@ const vAge     = v => v.AGE        || v.age        || ''
 const vGender  = v => v.GENDER     || v.gender     || ''
 const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO    || v.houseNo    || v.house_no    || ''
 
-const GENDER_COLOR = { Male: '#3B82F6', Female: '#EC4899', M: '#3B82F6', F: '#EC4899' }
+const GENDER_COLOR = { Male: '#3B82F6', MALE: '#3B82F6', M: '#3B82F6', Female: '#EC4899', FEMALE: '#EC4899', F: '#EC4899' }
 
 const VoterCard = memo(function VoterCard({ voter, onPress }) {
   const name     = vName(voter)
