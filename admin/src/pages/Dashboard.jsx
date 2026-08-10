@@ -25,13 +25,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   async function loadStats() {
-    const [boothsRes, voterRes, agentsRes, surveysRes, phasesRes, assignmentsRes] = await Promise.all([
+    const [boothsRes, voterRes, agentsRes, surveysRes, phasesRes, assignmentsRes, responsesRes] = await Promise.all([
       supabase.from('booths').select('boothNo, voterCount'),
       supabase.from('voter_imports').select('data').eq('id', 'latest').single(),
       supabase.from('agents').select('data, inserted_at').order('inserted_at', { ascending: false }),
       supabase.from('surveys').select('data, inserted_at').order('inserted_at', { ascending: false }),
       supabase.from('phases').select('data, inserted_at').order('inserted_at', { ascending: false }),
       supabase.from('assignments').select('data, inserted_at').order('inserted_at', { ascending: false }),
+      supabase.from('responses').select('data, inserted_at').order('inserted_at', { ascending: true }),
     ])
 
     const booths      = boothsRes.data || []
@@ -40,6 +41,7 @@ export default function Dashboard() {
     const surveys     = (surveysRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
     const phases      = (phasesRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
     const assignments = (assignmentsRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
+    const responses   = (responsesRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
 
     const latestPhase   = phases[0] || null
     const activeAgents  = agents.filter(a => a.status === 'Active').length
@@ -59,6 +61,7 @@ export default function Dashboard() {
       surveys,
       phases,
       assignments,
+      responses,
     })
     setSynced(new Date())
     setLoading(false)

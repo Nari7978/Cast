@@ -4,15 +4,24 @@ import {
 } from 'recharts'
 import { ArrowRight } from 'lucide-react'
 
-const responseTrend = [
-  { date: '01 May', responses: 1240 },
-  { date: '05 May', responses: 2890 },
-  { date: '10 May', responses: 4520 },
-  { date: '15 May', responses: 3890 },
-  { date: '20 May', responses: 6240 },
-  { date: '25 May', responses: 5820 },
-  { date: '31 May', responses: 7650 },
-]
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+function buildTrend(responses) {
+  if (!responses || responses.length === 0) return []
+  const counts = {}
+  responses.forEach(r => {
+    const d = new Date(r.submittedAt || r.inserted_at)
+    if (isNaN(d)) return
+    const key = `${String(d.getDate()).padStart(2,'0')} ${MONTHS[d.getMonth()]}`
+    counts[key] = (counts[key] || 0) + 1
+  })
+  return Object.entries(counts)
+    .sort((a, b) => {
+      const parse = s => { const [day, mon] = s.split(' '); return MONTHS.indexOf(mon) * 31 + parseInt(day) }
+      return parse(a[0]) - parse(b[0])
+    })
+    .map(([date, count]) => ({ date, responses: count }))
+}
 
 function Card({ title, subtitle, children, action }) {
   return (
@@ -76,12 +85,40 @@ function CampaignProgress({ stats }) {
   )
 }
 
-function ResponseTrend() {
+function ResponseTrend({ stats }) {
+  const trendData = buildTrend(stats?.responses)
+  const hasData = trendData.length > 0
+
   return (
-    <Card title="Response Trend" subtitle="No response data collected yet" action="View All">
-      <div className="flex items-center justify-center h-[230px]">
-        <p className="text-slate-300 text-[13px]">Responses will appear here once collected</p>
-      </div>
+    <Card
+      title="Response Trend"
+      subtitle={hasData ? `${stats.responses.length} total responses` : 'No response data collected yet'}
+      action="View All"
+    >
+      {hasData ? (
+        <ResponsiveContainer width="100%" height={230}>
+          <LineChart data={trendData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip
+              contentStyle={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 12 }}
+              itemStyle={{ color: '#5B5CEB' }}
+              labelStyle={{ color: '#1E293B', fontWeight: 600 }}
+            />
+            <Line
+              type="monotone" dataKey="responses"
+              stroke="#5B5CEB" strokeWidth={2.5}
+              dot={{ fill: '#5B5CEB', r: 4, strokeWidth: 0 }}
+              activeDot={{ r: 6, fill: '#5B5CEB' }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="flex items-center justify-center h-[230px]">
+          <p className="text-slate-300 text-[13px]">Responses will appear here once collected</p>
+        </div>
+      )}
     </Card>
   )
 }
@@ -179,7 +216,7 @@ export default function ChartsRow1({ stats }) {
   return (
     <div className="grid grid-cols-12 gap-5">
       <div className="col-span-3"><CampaignProgress stats={stats} /></div>
-      <div className="col-span-5"><ResponseTrend /></div>
+      <div className="col-span-5"><ResponseTrend stats={stats} /></div>
       <div className="col-span-2"><BoothCoverage stats={stats} /></div>
       <div className="col-span-2"><BoothHealth stats={stats} /></div>
     </div>
