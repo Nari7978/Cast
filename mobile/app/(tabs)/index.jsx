@@ -67,11 +67,12 @@ export default function HomeScreen() {
   const pct       = total ? Math.round((completed / total) * 100) : 0
 
   const vGender = v => v.GENDER || v.gender || ''
-  const isMale   = g => { const u = g.toUpperCase().trim(); return u === 'MALE' || u === 'M' || u === 'पुरुष' }
-  const isFemale = g => { const u = g.toUpperCase().trim(); return u === 'FEMALE' || u === 'F' || u === 'महिला' }
+  const isMale   = g => { const t = g.trim(); const u = t.toUpperCase(); return u === 'MALE' || u === 'M' || t === 'पुरुष' }
+  const isFemale = g => { const t = g.trim(); const u = t.toUpperCase(); return u === 'FEMALE' || u === 'F' || t === 'महिला' }
+  const isOther  = g => { const t = g.trim(); const u = t.toUpperCase(); return u === 'OTHER' || u === 'O' || t === 'तृतीय लिंग' }
   const maleCount   = voters.filter(v => isMale(vGender(v))).length
   const femaleCount = voters.filter(v => isFemale(vGender(v))).length
-  const otherCount  = total - maleCount - femaleCount
+  const otherCount  = voters.filter(v => isOther(vGender(v))).length
 
   const todayStr  = new Date().toDateString()
   const todayDone = Object.values(responses).filter(r => r.submittedAt && new Date(r.submittedAt).toDateString() === todayStr).length
