@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import {
-  Search, FileSpreadsheet, FileText, Eye, X,
+  Search, FileSpreadsheet, FileText, Eye, X, Trash2,
   ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   User, MapPin, Calendar, Building2, ClipboardList, MessageSquare,
-  Layers, Activity, CheckCircle2, Hash, Loader2,
+  Layers, Activity, CheckCircle2, Hash, Loader2, AlertTriangle,
 } from 'lucide-react'
-import { fetchResponsesData } from '../firebase/responseService'
+import { fetchResponsesData, deleteResponse } from '../firebase/responseService'
 
 const PHASE_COLORS = ['#5B5CEB','#10B981','#F59E0B','#8B5CF6','#EF4444','#3B82F6','#EC4899']
 
@@ -189,6 +189,8 @@ export default function Responses() {
   const [dateTo,        setDateTo]        = useState('')
   const [page,          setPage]          = useState(1)
   const [selected,      setSelected]      = useState(null)
+  const [deleteTarget,  setDeleteTarget]  = useState(null)
+  const [deleting,      setDeleting]      = useState(false)
 
   useEffect(() => {
     fetchResponsesData()
@@ -266,6 +268,20 @@ export default function Responses() {
     phases.forEach((p, i) => { m[p.id] = PHASE_COLORS[i % PHASE_COLORS.length] })
     return m
   }, [phases])
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await deleteResponse(deleteTarget.rawId)
+      setAllResponses(prev => prev.filter(r => r.rawId !== deleteTarget.rawId))
+      setDeleteTarget(null)
+    } catch (e) {
+      alert('Failed to delete: ' + (e?.message || 'Unknown error'))
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -444,7 +460,7 @@ export default function Responses() {
                 </thead>
                 <tbody>
                   {paginated.map((r, idx) => (
-                    <TableRow key={r.id} r={r} idx={idx} onView={() => setSelected(r)} phaseColorMap={phaseColorMap} />
+                    <TableRow key={r.id} r={r} idx={idx} onView={() => setSelected(r)} onDelete={() => setDeleteTarget(r)} phaseColorMap={phaseColorMap} />
                   ))}
                 </tbody>
               </table>
@@ -475,13 +491,52 @@ export default function Responses() {
 
       {/* ── Drawer ── */}
       <Drawer response={selected} onClose={() => setSelected(null)} />
+
+      {/* ── Delete Confirmation Modal ── */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.35)' }}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#FEF2F2' }}>
+                <AlertTriangle size={18} style={{ color: '#EF4444' }} />
+              </div>
+              <div>
+                <p className="font-bold text-sm" style={{ color: '#1E293B' }}>Delete Response</p>
+                <p className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>{deleteTarget.id}</p>
+              </div>
+            </div>
+            <p className="text-sm mb-5" style={{ color: '#475569' }}>
+              This response from <strong>{deleteTarget.voterName !== '—' ? deleteTarget.voterName : 'this voter'}</strong> will be permanently deleted and cannot be recovered.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors hover:bg-slate-50"
+                style={{ borderColor: '#E2E8F0', color: '#475569' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
+                style={{ background: '#EF4444', opacity: deleting ? 0.7 : 1 }}
+              >
+                {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── Table Row ────────────────────────────────────────────────────────────────
 
-function TableRow({ r, idx, onView, phaseColorMap }) {
+function TableRow({ r, idx, onView, onDelete, phaseColorMap }) {
   const [hover, setHover] = useState(false)
 
   const phaseColor = phaseColorMap?.[r.phaseId] ?? '#5B5CEB'
@@ -523,14 +578,26 @@ function TableRow({ r, idx, onView, phaseColorMap }) {
       <td className="px-4 py-3 whitespace-nowrap text-sm" style={{ color: '#475569' }}>{r.formName}</td>
       <td className="px-4 py-3 whitespace-nowrap text-sm" style={{ color: '#64748B' }}>{r.submittedOn}</td>
       <td className="px-4 py-3 whitespace-nowrap">
-        <button
-          onClick={onView}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:opacity-90"
-          style={{ background: '#EEF2FF', color: '#5B5CEB' }}
-        >
-          <Eye size={13} />
-          View
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onView}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:opacity-90"
+            style={{ background: '#EEF2FF', color: '#5B5CEB' }}
+          >
+            <Eye size={13} />
+            View
+          </button>
+          <button
+            onClick={onDelete}
+            className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors"
+            style={{ background: '#FEF2F2', color: '#EF4444' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2' }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#FEF2F2' }}
+            title="Delete response"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
       </td>
     </tr>
   )

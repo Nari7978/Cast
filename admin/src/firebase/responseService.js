@@ -1,5 +1,10 @@
 import { supabase } from '../supabase/config'
 
+export async function deleteResponse(rawId) {
+  const { error } = await supabase.from('responses').delete().eq('id', rawId)
+  if (error) throw error
+}
+
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 function fmtDate(iso) {
