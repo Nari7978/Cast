@@ -11,16 +11,23 @@ async function fetchAll() {
   ])
   if (error) throw error
 
-  // Count responses per phaseId only — no fallback to avoid misattribution
+  // Count responses and unique booths per phaseId
   const respCountMap = {}
+  const boothSetMap  = {}
   ;(respData || []).forEach(r => {
     const pid = r.data?.phaseId
-    if (pid) respCountMap[pid] = (respCountMap[pid] || 0) + 1
+    if (!pid) return
+    respCountMap[pid] = (respCountMap[pid] || 0) + 1
+    if (r.data?.boothNo) {
+      if (!boothSetMap[pid]) boothSetMap[pid] = new Set()
+      boothSetMap[pid].add(String(r.data.boothNo))
+    }
   })
 
   return data.map(row => ({
     ...toDoc(row),
     responses: respCountMap[row.id] || 0,
+    booths:    boothSetMap[row.id]?.size || 0,
   }))
 }
 
