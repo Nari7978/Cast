@@ -67,8 +67,10 @@ export default function HomeScreen() {
   const pct       = total ? Math.round((completed / total) * 100) : 0
 
   const vGender = v => v.GENDER || v.gender || ''
-  const maleCount   = voters.filter(v => { const g = vGender(v).toUpperCase(); return g === 'MALE'   || g === 'M' }).length
-  const femaleCount = voters.filter(v => { const g = vGender(v).toUpperCase(); return g === 'FEMALE' || g === 'F' }).length
+  const isMale   = g => { const u = g.toUpperCase().trim(); return u === 'MALE' || u === 'M' || u === 'पुरुष' }
+  const isFemale = g => { const u = g.toUpperCase().trim(); return u === 'FEMALE' || u === 'F' || u === 'महिला' }
+  const maleCount   = voters.filter(v => isMale(vGender(v))).length
+  const femaleCount = voters.filter(v => isFemale(vGender(v))).length
   const otherCount  = total - maleCount - femaleCount
 
   const todayStr  = new Date().toDateString()
@@ -120,7 +122,11 @@ export default function HomeScreen() {
             <Text style={styles.surveyCardName}>{activeSurvey.name || activeSurvey.title || 'Door-to-Door Survey'}</Text>
             <View style={styles.surveyCardMeta}>
               <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.surveyCardMetaText}>Booth {agent?.boothNo} · {activePhase?.name || 'Active Phase'}</Text>
+              <Text style={styles.surveyCardMetaText}>
+                Booth {agent?.boothNo}
+                {agent?.station ? ` · ${agent.station}` : ''}
+                {activePhase?.name ? ` · ${activePhase.name}` : ''}
+              </Text>
             </View>
           </View>
         ) : (
