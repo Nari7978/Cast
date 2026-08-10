@@ -21,7 +21,7 @@ function buildCSV(responses) {
   const fixed = [
     'Response ID', 'Campaign Phase', 'Survey Assignment', 'Survey Form',
     'Submission Date', 'Booth Number', 'Polling Station', 'Booth Agent',
-    'EPIC Number', 'Voter Name', 'Age', 'Gender', 'Mobile',
+    'EPIC Number', 'Voter Name', 'Age', 'Gender',
   ]
   const headers = [...fixed, ...allQ]
   const rows = responses.map(r => {
@@ -30,8 +30,11 @@ function buildCSV(responses) {
     return [
       r.id, r.phaseName, r.assignmentName, r.formName,
       r.submittedOn, r.boothNumber, r.stationName, r.agentName,
-      r.epicNo, r.voterName, r.age, r.gender, r.mobile,
-      ...allQ.map(q => aMap[q] ?? ''),
+      r.epicNo, r.voterName, r.age, r.gender,
+      ...allQ.map(q => {
+        const val = aMap[q]
+        return (val === undefined || val === null || val === '—' || val === '') ? '' : val
+      }),
     ]
   })
   return [headers, ...rows]
@@ -40,7 +43,8 @@ function buildCSV(responses) {
 }
 
 function downloadCSV(content, filename) {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+  // UTF-8 BOM (﻿) makes Excel open Hindi/Unicode text correctly
+  const blob = new Blob(['﻿' + content], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url; a.download = filename; a.click()
