@@ -11,11 +11,12 @@ import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
 import { syncPending } from '../../src/services/sync'
 
-const vName    = v => v.VOTER_NAME || v.ELECTOR_NAME || v.elector_name || v.name || v.voterName || v.voter_name || ''
-const vId      = v => v.EPIC_NO    || v.VOTER_ID   || v.epicNo     || v.voterId    || v.voter_id   || ''
-const vAge     = v => v.AGE        || v.age         || ''
-const vGender  = v => v.GENDER     || v.SEX         || v.gender     || v.sex        || ''
-const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO     || v.houseNo    || v.house_no   || ''
+const vName      = v => v.VOTER_NAME   || v.ELECTOR_NAME  || v.elector_name || v.name       || v.voterName   || v.voter_name   || ''
+const vId        = v => v.VOTER_ID     || v.EPIC_NO       || v.epicNo       || v.voterId    || v.voter_id    || ''
+const vFather    = v => v.FATHER_NAME  || v.FATHER        || v.fatherName   || v.father_name || ''
+const vAge       = v => v.AGE          || v.age           || ''
+const vGender    = v => v.GENDER       || v.SEX           || v.gender       || v.sex         || ''
+const vHouseNo   = v => v.HOUSE_NO     || v.HOUSENO       || v.houseNo      || v.house_no    || ''
 
 // ── Question Renderer ────────────────────────────────────────────────────────
 
@@ -300,6 +301,12 @@ export default function SurveyScreen() {
               </View>
               <View>
                 <Text style={styles.voterName}>{vName(voter) || '—'}</Text>
+                {!!vFather(voter) && (
+                  <View style={styles.voterMeta}>
+                    <Ionicons name="person-outline" size={11} color={theme.textMuted} />
+                    <Text style={styles.voterMetaText}>{vFather(voter)}</Text>
+                  </View>
+                )}
                 <View style={styles.voterMeta}>
                   <Text style={styles.voterMetaText}>{vId(voter) || '—'}</Text>
                   <Text style={styles.voterMetaDot}>·</Text>

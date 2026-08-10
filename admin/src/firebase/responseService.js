@@ -35,12 +35,14 @@ export async function fetchResponsesData() {
   const voterMap = {}
   ;(voterRes.data || []).forEach(r => {
     voterMap[r.id] = {
-      boothNo:    String(r.boothNo || ''),
-      name:       r.data?.VOTER_NAME  || r.data?.name      || '',
-      epicNo:     r.data?.EPIC_NO     || r.data?.voterId   || '',
-      age:        r.data?.AGE         || r.data?.age        || '',
-      gender:     r.data?.GENDER      || r.data?.gender     || '',
-      mobile:     r.data?.MOBILE      || r.data?.mobile     || '',
+      boothNo:     String(r.boothNo || ''),
+      name:        r.data?.VOTER_NAME  || r.data?.name        || '',
+      epicNo:      r.data?.VOTER_ID    || r.data?.EPIC_NO     || r.data?.voterId || '',
+      fatherName:  r.data?.FATHER_NAME || r.data?.fatherName  || '',
+      age:         r.data?.AGE         || r.data?.age          || '',
+      gender:      r.data?.GENDER      || r.data?.gender       || '',
+      mobile:      r.data?.MOBILE      || r.data?.mobile       || '',
+      sno:         r.data?.SNO         || r.data?.SL_NO        || '',
     }
   })
 
@@ -101,11 +103,13 @@ export async function fetchResponsesData() {
     return {
       id:           fmtRespId(idx),
       rawId:        row.id,
-      epicNo:       voter.epicNo    || '—',
-      voterName:    voter.name      || '—',
-      age:          voter.age       || '',
-      gender:       voter.gender    || '',
-      mobile:       voter.mobile    || '',
+      epicNo:       voter.epicNo      || '—',
+      voterName:    voter.name        || '—',
+      fatherName:   voter.fatherName  || '',
+      age:          voter.age         || '',
+      gender:       voter.gender      || '',
+      mobile:       voter.mobile      || '',
+      sno:          voter.sno         || '',
       boothNo,
       boothNumber:  boothNo ? `Booth ${boothNo}` : '—',
       stationName:  booth.pollingStation || '—',

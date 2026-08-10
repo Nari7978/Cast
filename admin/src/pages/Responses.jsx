@@ -114,13 +114,14 @@ function Drawer({ response, onClose }) {
               <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#94A3B8' }}>Voter Information</span>
             </div>
             <div className="rounded-xl p-4" style={{ background: '#F8FAFC', border: '1px solid #F1F5F9' }}>
-              <InfoRow label="EPIC Number"    value={response.epicNo} mono />
-              <InfoRow label="Voter Name"     value={response.voterName} />
-              <InfoRow label="Age"            value={`${response.age} years`} />
-              <InfoRow label="Gender"         value={response.gender} />
-              <InfoRow label="Mobile"         value={response.mobile} mono />
-              <InfoRow label="Booth"          value={response.boothNumber} />
-              <InfoRow label="Polling Station" value={response.stationName} />
+              <InfoRow label="EPIC / Voter ID"  value={response.epicNo} mono />
+              <InfoRow label="Voter Name"       value={response.voterName} />
+              {response.fatherName && <InfoRow label="Father Name"  value={response.fatherName} />}
+              <InfoRow label="Age"              value={response.age ? `${response.age} years` : '—'} />
+              <InfoRow label="Gender"           value={response.gender} />
+              <InfoRow label="Mobile"           value={response.mobile} mono />
+              <InfoRow label="Booth"            value={response.boothNumber} />
+              <InfoRow label="Polling Station"  value={response.stationName} />
             </div>
           </div>
 
