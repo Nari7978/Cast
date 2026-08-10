@@ -5,9 +5,23 @@ const COL = 'phases'
 const toDoc = row => ({ id: row.id, _createdAt: row.inserted_at, ...row.data })
 
 async function fetchAll() {
-  const { data, error } = await supabase.from(COL).select('*').order('inserted_at', { ascending: false })
+  const [{ data, error }, { data: respData }] = await Promise.all([
+    supabase.from(COL).select('*').order('inserted_at', { ascending: false }),
+    supabase.from('responses').select('id, data'),
+  ])
   if (error) throw error
-  return data.map(toDoc)
+
+  // Count responses per phaseId
+  const respCountMap = {}
+  ;(respData || []).forEach(r => {
+    const pid = r.data?.phaseId
+    if (pid) respCountMap[pid] = (respCountMap[pid] || 0) + 1
+  })
+
+  return data.map(row => ({
+    ...toDoc(row),
+    responses: respCountMap[row.id] || 0,
+  }))
 }
 
 export function subscribePhases(cb, onError) {
