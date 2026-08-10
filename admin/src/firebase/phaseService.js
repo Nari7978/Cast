@@ -11,10 +11,11 @@ async function fetchAll() {
   ])
   if (error) throw error
 
-  // Count responses per phaseId
+  // Count responses per phaseId; fall back unmatched to the active phase
+  const activePhaseId = data.find(row => row.data?.status === 'Active')?.id || null
   const respCountMap = {}
   ;(respData || []).forEach(r => {
-    const pid = r.data?.phaseId
+    const pid = r.data?.phaseId || activePhaseId
     if (pid) respCountMap[pid] = (respCountMap[pid] || 0) + 1
   })
 

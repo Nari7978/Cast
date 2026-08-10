@@ -36,8 +36,7 @@ const STATUS_CFG = {
 const CATEGORIES = ['Outreach', 'Issue Collection', 'Verification', 'Feedback', 'Exit Poll', 'Other']
 
 import { subscribeSurveyForms, createSurveyForm, updateSurveyForm, deleteSurveyForm } from '../firebase/surveyService'
-
-const LINKED_PHASES = []
+import { subscribePhases } from '../firebase/phaseService'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -246,7 +245,7 @@ function PreviewModal({ formName, formDesc, questions, mode, onClose }) {
 
 // ─── Survey Builder ───────────────────────────────────────────────────────────
 
-function SurveyBuilder({ initForm, onBack, onSave }) {
+function SurveyBuilder({ initForm, phases = [], onBack, onSave }) {
   const [meta, setMeta]     = useState({ name: initForm?.name || '', description: initForm?.description || '', category: initForm?.category || '', status: initForm?.status || 'Draft' })
   const [questions, setQs]  = useState(initForm?.questions ? [...initForm.questions] : [])
   const [activeQId, setAQ]  = useState(null)
@@ -280,7 +279,7 @@ function SurveyBuilder({ initForm, onBack, onSave }) {
     }
   }
 
-  const linkedPhases = (initForm?.linkedPhases || []).map(id => LINKED_PHASES.find(p => p.id === id)).filter(Boolean)
+  const linkedPhases = phases.filter(p => (p.surveyForms || []).includes(initForm?.id))
 
   return (
     <div className="fixed bg-[#F5F7FB] z-30 flex flex-col" style={{ inset: 0, left: 256, top: 64 }}>
@@ -411,6 +410,7 @@ function SurveyBuilder({ initForm, onBack, onSave }) {
 
 export default function SurveyForms() {
   const [forms, setForms]       = useState([])
+  const [phases, setPhases]     = useState([])
   const [view, setView]         = useState('list')   // 'list' | 'builder'
   const [builderForm, setBForm] = useState(null)
   const [search, setSearch]     = useState('')
@@ -419,6 +419,7 @@ export default function SurveyForms() {
   const [confirmDelete, setConfirmDelete] = useState(null)
 
   useEffect(() => subscribeSurveyForms(data => setForms(data)), [])
+  useEffect(() => subscribePhases(data => setPhases(data), () => {}), [])
 
   useEffect(() => {
     if (drawerForm) setDrawer(forms.find(f => f.id === drawerForm.id) || null)
@@ -466,7 +467,7 @@ export default function SurveyForms() {
 
   // ── Builder view ──
   if (view === 'builder') {
-    return <SurveyBuilder initForm={builderForm} onBack={() => setView('list')} onSave={saveForm} />
+    return <SurveyBuilder initForm={builderForm} phases={phases} onBack={() => setView('list')} onSave={saveForm} />
   }
 
   // ── List view ──
@@ -540,7 +541,7 @@ export default function SurveyForms() {
                 ? <tr><td colSpan={7} className="text-center py-14 text-slate-400 text-[13px]">No survey forms found.</td></tr>
                 : filtered.map(f => {
                   const sc = STATUS_CFG[f.status] || STATUS_CFG.Draft
-                  const lp = (f.linkedPhases || []).map(id => LINKED_PHASES.find(p => p.id === id)).filter(Boolean)
+                  const lp = phases.filter(p => (p.surveyForms || []).includes(f.id))
                   return (
                     <tr key={f.id} onClick={() => setDrawer(f)} className="border-b border-slate-50 hover:bg-slate-50/60 cursor-pointer transition-colors group">
                       <td className="px-4 py-3.5">
@@ -679,22 +680,19 @@ export default function SurveyForms() {
               {/* Linked phases (read-only) */}
               <div className="px-5 py-4 border-b border-[#E8ECF4]">
                 <p className="text-slate-600 font-semibold text-[13px] mb-3">Linked Campaign Phases</p>
-                {drawerForm.linkedPhases.length === 0
+                {(() => { const lp = phases.filter(p => (p.surveyForms || []).includes(drawerForm.id)); return lp.length === 0
                   ? <p className="text-slate-400 text-[12px]">Not linked to any phase yet.</p>
                   : (
                     <div className="space-y-1.5">
-                      {drawerForm.linkedPhases.map(id => {
-                        const p = LINKED_PHASES.find(x => x.id === id); if (!p) return null
-                        return (
-                          <div key={id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-[#E8ECF4]">
-                            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.color }} />
-                            <span className="text-slate-700 text-[13px]">{p.name}</span>
-                          </div>
-                        )
-                      })}
+                      {lp.map(p => (
+                        <div key={p.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-[#E8ECF4]">
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.color || '#5B5CEB' }} />
+                          <span className="text-slate-700 text-[13px]">{p.name}</span>
+                        </div>
+                      ))}
                     </div>
                   )
-                }
+                })()}
                 <p className="text-slate-400 text-[10px] mt-2 flex items-center gap-1"><Link2 size={9} /> Link phases from Campaign Phases module</p>
               </div>
 

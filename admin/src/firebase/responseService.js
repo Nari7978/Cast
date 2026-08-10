@@ -48,10 +48,11 @@ export async function fetchResponsesData() {
   const phases = (phaseRes.data || []).map(r => ({ id: r.id, ...r.data }))
   phases.forEach(p => { phaseMap[p.id] = p })
 
-  // Map surveyId → phase for quick lookup
+  // Map surveyId → phase (check both surveyId and surveyForms array)
   const surveyPhaseMap = {}
   phases.forEach(p => {
     if (p.surveyId) surveyPhaseMap[p.surveyId] = p
+    ;(p.surveyForms || []).forEach(fid => { if (!surveyPhaseMap[fid]) surveyPhaseMap[fid] = p })
   })
 
   const boothMap = {}

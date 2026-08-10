@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 
 import { subscribePhases, createPhase, updatePhase, deletePhase } from '../firebase/phaseService'
+import { subscribeSurveyForms } from '../firebase/surveyService'
 
 const STATUS_CONFIG = {
   Active:    { color: '#10B981', bg: '#ECFDF5', icon: Activity,      label: 'Active'    },
@@ -34,7 +35,7 @@ function fmtShort(dateStr) {
 
 const EMPTY_FORM = {
   name: '', description: '', startDate: '', endDate: '',
-  status: 'Draft', color: '#5B5CEB', notes: '',
+  status: 'Draft', color: '#5B5CEB', notes: '', surveyForms: [],
 }
 const COLOR_PRESETS = ['#5B5CEB','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#EF4444','#64748B']
 
@@ -42,6 +43,7 @@ const COLOR_PRESETS = ['#5B5CEB','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D
 
 export default function Phases() {
   const [phases, setPhases]         = useState([])
+  const [surveys, setSurveys]       = useState([])
   const [search, setSearch]         = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [drawerPhase, setDrawerPhase]   = useState(null)
@@ -54,6 +56,7 @@ export default function Phases() {
   const [confirmDelete, setConfirmDelete]     = useState(null)  // phase to delete
 
   useEffect(() => subscribePhases(data => setPhases(data)), [])
+  useEffect(() => subscribeSurveyForms(data => setSurveys(data), () => {}), [])
 
   useEffect(() => {
     if (drawerPhase) setDrawerPhase(phases.find(p => p.id === drawerPhase.id) || null)
@@ -82,7 +85,7 @@ export default function Phases() {
   // ── open edit ────
   function openEdit(phase) {
     setEditingPhase(phase)
-    setForm({ name: phase.name, description: phase.description, startDate: phase.startDate, endDate: phase.endDate, status: phase.status, color: phase.color, notes: phase.notes })
+    setForm({ name: phase.name, description: phase.description, startDate: phase.startDate, endDate: phase.endDate, status: phase.status, color: phase.color, notes: phase.notes, surveyForms: phase.surveyForms || [] })
     setFormErrors({})
     setShowForm(true)
   }
@@ -667,6 +670,33 @@ export default function Phases() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Survey Forms */}
+              <div>
+                <label className="block text-slate-600 text-[12px] font-semibold mb-1.5">Linked Survey Forms</label>
+                {surveys.length === 0 ? (
+                  <p className="text-slate-400 text-[12px]">No survey forms available. Create one first.</p>
+                ) : (
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-[#E8ECF4] rounded-xl p-3">
+                    {surveys.map(s => (
+                      <label key={s.id} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={(form.surveyForms || []).includes(s.id)}
+                          onChange={e => setForm(f => ({
+                            ...f,
+                            surveyForms: e.target.checked
+                              ? [...(f.surveyForms || []), s.id]
+                              : (f.surveyForms || []).filter(id => id !== s.id),
+                          }))}
+                          className="accent-[#5B5CEB]"
+                        />
+                        <span className="text-[13px] text-slate-700">{s.name || s.title || s.id}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Notes */}
