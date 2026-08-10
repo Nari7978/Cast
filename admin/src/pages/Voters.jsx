@@ -482,15 +482,13 @@ export default function Voters() {
             {/* Table */}
             <div className="bg-white rounded-2xl border border-[#E8ECF4] overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
               <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 400px)', overflowY: 'auto' }}>
-                <table className="border-collapse" style={{ minWidth: `${(displayCols.length + 2) * 130}px`, width: '100%' }}>
+                <table className="border-collapse" style={{ minWidth: `${(displayCols.length + 1) * 130}px`, width: '100%' }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
                     <tr className="border-b border-[#E8ECF4]" style={{ background: '#F8FAFC' }}>
-                      <th className="text-left px-4 py-3 text-slate-400 font-semibold text-[11px] uppercase tracking-wider"
-                        style={{ position: 'sticky', left: 0, zIndex: 31, background: '#F8FAFC', width: 48, minWidth: 48 }}>#</th>
                       {displayCols.map((col, ci) => (
                         <th key={col} onClick={() => handleSort(col)}
                           className="text-left px-4 py-3 text-slate-500 font-semibold text-[11px] uppercase tracking-wider cursor-pointer select-none whitespace-nowrap"
-                          style={ci === 0 ? { position: 'sticky', left: 48, zIndex: 31, background: '#F8FAFC' } : { background: '#F8FAFC' }}>
+                          style={ci === 0 ? { position: 'sticky', left: 0, zIndex: 31, background: '#F8FAFC' } : { background: '#F8FAFC' }}>
                           <div className="flex items-center gap-1.5 hover:text-slate-700 transition-colors">
                             {hl(col)}<SortIcon col={col} sort={sort} />
                           </div>
@@ -502,18 +500,15 @@ export default function Voters() {
                   </thead>
                   <tbody>
                     {pageData.length === 0 ? (
-                      <tr><td colSpan={displayCols.length + 2} className="text-center py-16 text-slate-400 text-[13px]">No voters match your search or filters.</td></tr>
-                    ) : pageData.map((voter, idx) => (
+                      <tr><td colSpan={displayCols.length + 1} className="text-center py-16 text-slate-400 text-[13px]">No voters match your search or filters.</td></tr>
+                    ) : pageData.map((voter) => (
                       <tr key={voter._id} onClick={() => setDrawerVoter(voter)}
                         className="border-b border-slate-50 cursor-pointer"
                         onMouseEnter={e => e.currentTarget.style.background = '#F8FAFD'}
                         onMouseLeave={e => e.currentTarget.style.background = ''}>
-                        <td className="px-4 py-3 text-slate-400 text-[11px]" style={{ position: 'sticky', left: 0, zIndex: 10, background: 'inherit' }}>
-                          {(page - 1) * PAGE_SIZE + idx + 1}
-                        </td>
                         {displayCols.map((col, ci) => (
                           <td key={col} className="px-4 py-3"
-                            style={ci === 0 ? { position: 'sticky', left: 48, zIndex: 10, background: 'inherit' } : {}}>
+                            style={ci === 0 ? { position: 'sticky', left: 0, zIndex: 10, background: 'inherit' } : {}}>
                             <CellContent col={col} val={voter[col]} />
                           </td>
                         ))}

@@ -42,6 +42,7 @@ export async function fetchResponsesData() {
       age:         r.data?.AGE         || r.data?.age          || '',
       gender:      r.data?.GENDER      || r.data?.gender       || '',
       mobile:      r.data?.MOBILE      || r.data?.mobile       || '',
+      houseNo:     r.data?.HOUSE_NO    || r.data?.houseNo      || '',
       sno:         r.data?.SNO         || r.data?.SL_NO        || '',
     }
   })
@@ -109,6 +110,7 @@ export async function fetchResponsesData() {
       age:          voter.age         || '',
       gender:       voter.gender      || '',
       mobile:       voter.mobile      || '',
+      houseNo:      voter.houseNo     || '',
       sno:          voter.sno         || '',
       boothNo,
       boothNumber:  boothNo ? `Booth ${boothNo}` : '—',

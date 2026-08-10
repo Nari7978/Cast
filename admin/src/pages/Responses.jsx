@@ -120,6 +120,7 @@ function Drawer({ response, onClose }) {
               <InfoRow label="Age"              value={response.age ? `${response.age} years` : '—'} />
               <InfoRow label="Gender"           value={response.gender} />
               <InfoRow label="Mobile"           value={response.mobile} mono />
+              {response.houseNo && <InfoRow label="House No" value={response.houseNo} />}
               <InfoRow label="Booth"            value={response.boothNumber} />
               <InfoRow label="Polling Station"  value={response.stationName} />
             </div>
