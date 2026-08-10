@@ -79,11 +79,13 @@ function PhaseCard({ phase, survey, isActive, onPress, completedCount, totalCoun
 export default function TasksScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { agent, activeSurvey, activePhase, setActiveSurvey, setActivePhase, pendingResponses, voters } = useStore()
-  const [phases,     setPhases]     = useState([])
-  const [surveys,    setSurveys]    = useState([])
-  const [loading,    setLoading]    = useState(!activeSurvey)
-  const [refreshing, setRefreshing] = useState(false)
+  const { agent, setActiveSurvey, setActivePhase, pendingResponses, voters } = useStore()
+  const [phases,          setPhases]          = useState([])
+  const [surveys,         setSurveys]         = useState([])
+  const [localSurvey,     setLocalSurvey]     = useState(null)
+  const [fetched,         setFetched]         = useState(false)
+  const [loading,         setLoading]         = useState(true)
+  const [refreshing,      setRefreshing]      = useState(false)
 
   const load = useCallback(async (force = false) => {
     try {
@@ -91,16 +93,18 @@ export default function TasksScreen() {
       const res = await fetchActiveSurveyData(agent?.boothNo)
       setPhases(res.phases   || [])
       setSurveys(res.surveys || [])
+      setLocalSurvey(res.activeSurvey || null)
       setActiveSurvey(res.activeSurvey)
       setActivePhase(res.activePhase)
     } catch (_) {}
+    setFetched(true)
     setLoading(false)
     setRefreshing(false)
   }, [agent?.boothNo])
 
   useEffect(() => { load(false) }, [])
 
-  const getSurvey = (phase) => surveys.find(s => s.id === phase.surveyId) || activeSurvey
+  const getSurvey = (phase) => surveys.find(s => s.id === phase.surveyId) || localSurvey
 
   const completedCount = pendingResponses.filter(r => r.submittedAt).length
   const totalCount     = voters.length
@@ -139,7 +143,7 @@ export default function TasksScreen() {
               totalCount={totalCount}
             />
           ))
-        ) : activeSurvey ? (
+        ) : fetched && localSurvey ? (
           <TouchableOpacity
             style={[styles.card, styles.cardActive]}
             onPress={() => router.push('/survey/voters')}
@@ -152,7 +156,7 @@ export default function TasksScreen() {
                   <Ionicons name="clipboard" size={20} color={theme.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.phaseName}>{activeSurvey.name || activeSurvey.title || 'Active Survey'}</Text>
+                  <Text style={styles.phaseName}>{localSurvey.name || localSurvey.title || 'Active Survey'}</Text>
                   <Text style={styles.surveyName}>Survey in progress</Text>
                 </View>
               </View>
