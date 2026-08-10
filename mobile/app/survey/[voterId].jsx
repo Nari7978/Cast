@@ -191,6 +191,7 @@ function SuccessScreen({ onBack }) {
       <Text style={styles.successTitle}>Survey Submitted!</Text>
       <Text style={styles.successSub}>Response saved. Will sync automatically when connected.</Text>
       <TouchableOpacity style={styles.backListBtn} onPress={onBack} activeOpacity={0.85}>
+        <Ionicons name="arrow-back" size={18} color="#fff" />
         <Text style={styles.backListBtnText}>Back to Voter List</Text>
       </TouchableOpacity>
     </View>
@@ -437,6 +438,10 @@ const styles = StyleSheet.create({
   successIcon:  { marginBottom: 20 },
   successTitle: { fontSize: 24, fontWeight: '800', color: theme.text, marginBottom: 10 },
   successSub:   { fontSize: 14, color: theme.textSub, textAlign: 'center', marginBottom: 36, lineHeight: 22 },
-  backListBtn:  { padding: 16, width: '100%', alignItems: 'center' },
-  backListBtnText:{ color: theme.textSub, fontSize: 14, fontWeight: '600' },
+  backListBtn:  {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: theme.primary, borderRadius: theme.radius.xl,
+    paddingVertical: 16, paddingHorizontal: 32, marginTop: 12,
+  },
+  backListBtnText:{ color: '#fff', fontSize: 15, fontWeight: '700' },
 })
