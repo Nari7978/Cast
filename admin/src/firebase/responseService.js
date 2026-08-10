@@ -75,14 +75,14 @@ export async function fetchResponsesData() {
 
   // Enrich responses
   const rawResp = respRes.data || []
-  const fallbackPhase = phases.find(p => p.status === 'Active') || null
+
   const responses = rawResp.map((row, idx) => {
     const d = row.data || {}
     const voter   = voterMap[d.voterId]   || {}
     const boothNo = String(d.boothNo || voter.boothNo || '')
     const booth   = boothMap[boothNo]     || {}
     const survey  = surveyMap[d.surveyId] || {}
-    const phase   = phaseMap[d.phaseId] || surveyPhaseMap[d.surveyId] || fallbackPhase || null
+    const phase   = phaseMap[d.phaseId] || surveyPhaseMap[d.surveyId] || null
 
     // Build answers array from answers object + survey questions
     const answersObj = d.answers || {}
