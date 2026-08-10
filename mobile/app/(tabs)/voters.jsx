@@ -1,17 +1,18 @@
-import { useState, useMemo, useCallback, memo } from 'react'
+import { useState, useMemo, useCallback, memo, useEffect } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TextInput,
-  TouchableOpacity, Pressable,
+  TouchableOpacity, Pressable, ActivityIndicator, RefreshControl,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
+import { fetchVotersForBooth } from '../../src/services/sync'
 
 // Voter field helpers — handles both CSV-style (VOTER_NAME) and camelCase keys
 const vName    = v => v.VOTER_NAME || v.name       || v.voterName  || v.voter_name  || ''
-const vId      = v => v.EPIC_NO    || v.VOTER_ID   || v.epicNo     || v.voterId     || v.voter_id    || ''
+const vId      = v => v.VOTER_ID   || v.EPIC_NO    || v.epicNo     || v.voterId     || v.voter_id    || ''
 const vAge     = v => v.AGE        || v.age        || ''
 const vGender  = v => v.GENDER     || v.gender     || ''
 const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO    || v.houseNo    || v.house_no    || ''
@@ -54,9 +55,24 @@ function MetaChip({ icon, text }) {
 export default function VotersScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const voters = useStore(s => s.voters)
+  const agent  = useStore(s => s.agent)
 
-  const [search, setSearch] = useState('')
+  const [voters,     setVoters]     = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [search,     setSearch]     = useState('')
+
+  const load = useCallback(async () => {
+    if (!agent?.boothNo) { setLoading(false); return }
+    try {
+      const data = await fetchVotersForBooth(agent.boothNo)
+      setVoters(data)
+    } catch (_) {}
+    setLoading(false)
+    setRefreshing(false)
+  }, [agent?.boothNo])
+
+  useEffect(() => { load() }, [load])
 
   const filtered = useMemo(() => {
     if (!search) return voters
@@ -75,6 +91,14 @@ export default function VotersScreen() {
       onPress={() => router.push(`/survey/${item.id}`)}
     />
   ), [router])
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    )
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -108,6 +132,7 @@ export default function VotersScreen() {
         keyExtractor={item => item.id}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load() }} tintColor={theme.primary} />}
         showsVerticalScrollIndicator={false}
         initialNumToRender={15}
         maxToRenderPerBatch={10}
