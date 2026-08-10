@@ -202,7 +202,7 @@ export default function SurveyScreen() {
   const { voterId }   = useLocalSearchParams()
   const insets        = useSafeAreaInsets()
   const router        = useRouter()
-  const { voters, activeSurvey, activePhase, saveResponse, responses } = useStore()
+  const { voters, activeSurvey, activePhase, agent, saveResponse, responses } = useStore()
 
   const voter    = voters.find(v => v.id === voterId)
   const existing = responses[voterId]
@@ -236,7 +236,7 @@ export default function SurveyScreen() {
       voterId,
       surveyId:    activeSurvey?.id,
       phaseId:     activePhase?.id,
-      boothNo:     voter?.boothNo,
+      boothNo:     voter?.boothNo || agent?.boothNo,
       answers:     { ...answers, [question.id]: answer },
       submittedAt: new Date().toISOString(),
       synced:      false,

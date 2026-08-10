@@ -146,5 +146,5 @@ export async function fetchVotersForBooth(boothNo) {
     .order('inserted_at', { ascending: true })
 
   if (error) throw error
-  return (data || []).map(r => ({ ...r.data, id: r.id }))
+  return (data || []).map(r => ({ ...r.data, id: r.id, boothNo: r.boothNo }))
 }
