@@ -46,133 +46,254 @@ const navGroups = [
   },
 ]
 
+const sidebarStyles = `
+  .sb-nav-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(210,213,235,0.6);
+    text-decoration: none;
+    transition: color 0.18s ease, background 0.18s ease;
+    overflow: hidden;
+    cursor: pointer;
+    user-select: none;
+  }
+  .sb-nav-link::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 50%;
+    transform: translateY(-50%) scaleY(0);
+    width: 3px;
+    height: 60%;
+    border-radius: 0 3px 3px 0;
+    background: #5B5CEB;
+    transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .sb-nav-link .sb-icon {
+    flex-shrink: 0;
+    transition: transform 0.18s ease, color 0.18s ease;
+    color: rgba(210,213,235,0.45);
+  }
+  .sb-nav-link:hover {
+    color: rgba(210,213,235,0.95);
+    background: rgba(255,255,255,0.055);
+  }
+  .sb-nav-link:hover .sb-icon {
+    transform: scale(1.12);
+    color: rgba(210,213,235,0.85);
+  }
+  .sb-nav-link.active {
+    color: #c7c8f8;
+    background: rgba(91,92,235,0.14);
+    font-weight: 600;
+  }
+  .sb-nav-link.active::before {
+    transform: translateY(-50%) scaleY(1);
+  }
+  .sb-nav-link.active .sb-icon {
+    color: #818CF8;
+    transform: scale(1.05);
+  }
+
+  .sb-poll-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 11px 16px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    text-decoration: none;
+    background: linear-gradient(135deg, #5B5CEB 0%, #7C7DFA 100%);
+    box-shadow: 0 4px 20px rgba(91,92,235,0.45);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    letter-spacing: 0.01em;
+  }
+  .sb-poll-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 7px 26px rgba(91,92,235,0.6);
+    filter: brightness(1.07);
+  }
+  .sb-poll-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 3px 14px rgba(91,92,235,0.4);
+  }
+  .sb-poll-btn.active {
+    filter: brightness(0.9);
+    box-shadow: 0 2px 10px rgba(91,92,235,0.35);
+  }
+
+  .sb-logout {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(210,213,235,0.35);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+    text-align: left;
+  }
+  .sb-logout:hover {
+    color: #F87171;
+    background: rgba(239,68,68,0.1);
+  }
+
+  .sb-scroll::-webkit-scrollbar { display: none; }
+  .sb-scroll { scrollbar-width: none; }
+`
+
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
   return (
-    <aside
-      className="fixed left-0 top-0 h-screen w-64 flex flex-col z-50"
-      style={{ background: '#0B0D27', borderRight: '1px solid rgba(255,255,255,0.05)' }}
-    >
-      {/* Logo */}
-      <div
-        className="flex items-center gap-3 px-5 h-[64px] flex-shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+    <>
+      <style>{sidebarStyles}</style>
+      <aside
+        className="fixed left-0 top-0 h-screen w-64 flex flex-col z-50"
+        style={{
+          background: 'linear-gradient(180deg, #0A0C22 0%, #080B1E 100%)',
+          borderRight: '1px solid rgba(255,255,255,0.055)',
+        }}
       >
+        {/* Logo */}
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)', boxShadow: '0 4px 14px rgba(91,92,235,0.45)' }}
-        >
-          <svg viewBox="0 0 24 24" fill="none" className="w-4.5 h-4.5 w-[18px] h-[18px]">
-            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-              stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-        <div>
-          <p className="text-white font-bold text-sm tracking-[3px]">CAST</p>
-          <p className="text-[9px] font-semibold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.3)' }}>
-            Admin Portal
-          </p>
-        </div>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5"
-        style={{ scrollbarWidth: 'none' }}>
-        {navGroups.map((group) => (
-          <div key={group.label} className="mb-5">
-            <p
-              className="text-[9px] font-bold uppercase tracking-[1.8px] px-3 mb-1.5"
-              style={{ color: 'rgba(255,255,255,0.22)' }}
-            >
-              {group.label}
-            </p>
-            <ul className="space-y-0.5">
-              {group.items.map(({ icon: Icon, label, path }) => (
-                <li key={path}>
-                  <NavLink
-                    to={path}
-                    end={path === '/'}
-                    className="flex items-center gap-3 px-3 py-[9px] rounded-xl text-[13px] font-medium transition-all duration-150"
-                    style={({ isActive }) => ({
-                      background: isActive ? 'rgba(91,92,235,0.18)' : 'transparent',
-                      color: isActive ? '#818CF8' : 'rgba(255,255,255,0.45)',
-                      borderLeft: isActive ? '2.5px solid #5B5CEB' : '2.5px solid transparent',
-                    })}
-                    onMouseEnter={e => {
-                      if (!e.currentTarget.getAttribute('aria-current')) {
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-                        e.currentTarget.style.color = 'rgba(255,255,255,0.7)'
-                      }
-                    }}
-                    onMouseLeave={e => {
-                      if (!e.currentTarget.getAttribute('aria-current')) {
-                        e.currentTarget.style.background = ''
-                        e.currentTarget.style.color = ''
-                      }
-                    }}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <Icon size={15} style={{ opacity: isActive ? 1 : 0.6, flexShrink: 0 }} />
-                        {label}
-                      </>
-                    )}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </nav>
-
-      {/* Voting Day Poll — pinned CTA */}
-      <div className="px-3 pb-3 flex-shrink-0">
-        <NavLink
-          to="/voting-day-poll"
-          className="flex items-center justify-center gap-2.5 w-full py-3 rounded-2xl text-[13px] font-bold transition-all duration-150"
-          style={({ isActive }) => ({
-            background: isActive
-              ? 'linear-gradient(135deg, #4748c4, #6366f1)'
-              : 'linear-gradient(135deg, #5B5CEB, #818CF8)',
-            color: '#fff',
-            boxShadow: '0 4px 18px rgba(91,92,235,0.5)',
-          })}
-        >
-          <Radio size={15} />
-          Voting Day Poll
-        </NavLink>
-      </div>
-
-      {/* User section */}
-      <div className="px-3 pb-3 pt-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <div
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1"
-          style={{ background: 'rgba(255,255,255,0.04)' }}
+          className="flex items-center gap-3 px-5 flex-shrink-0"
+          style={{
+            height: 64,
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+          }}
         >
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)' }}
+            className="flex items-center justify-center flex-shrink-0"
+            style={{
+              width: 36, height: 36,
+              borderRadius: 10,
+              background: 'linear-gradient(135deg, #5B5CEB 0%, #818CF8 100%)',
+              boxShadow: '0 4px 16px rgba(91,92,235,0.5)',
+            }}
           >
-            {(user?.name?.[0] ?? 'A').toUpperCase()}
+            <svg viewBox="0 0 24 24" fill="none" width={17} height={17}>
+              <path
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              />
+            </svg>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-xs font-bold truncate">{user?.name ?? 'Admin'}</p>
-            <p className="text-[10px] truncate" style={{ color: 'rgba(255,255,255,0.3)' }}>{user?.email ?? ''}</p>
+          <div>
+            <p style={{ color: '#fff', fontWeight: 800, fontSize: 14, letterSpacing: '0.2em', lineHeight: 1.2 }}>CAST</p>
+            <p style={{ color: 'rgba(210,213,235,0.28)', fontWeight: 600, fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase' }}>
+              Admin Portal
+            </p>
           </div>
         </div>
-        <button
-          onClick={() => { logout(); navigate('/login') }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-colors"
-          style={{ color: 'rgba(255,255,255,0.3)' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.color = '#F87171' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.3)' }}
+
+        {/* Nav */}
+        <nav className="sb-scroll flex-1 overflow-y-auto" style={{ padding: '16px 10px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {navGroups.map((group) => (
+            <div key={group.label} style={{ marginBottom: 20 }}>
+              <p style={{
+                fontSize: 9,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.16em',
+                color: 'rgba(210,213,235,0.22)',
+                padding: '0 12px',
+                marginBottom: 4,
+              }}>
+                {group.label}
+              </p>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {group.items.map(({ icon: Icon, label, path }) => (
+                  <li key={path}>
+                    <NavLink
+                      to={path}
+                      end={path === '/'}
+                      className={({ isActive }) => `sb-nav-link${isActive ? ' active' : ''}`}
+                    >
+                      <Icon size={15} className="sb-icon" />
+                      {label}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        {/* Voting Day Poll CTA */}
+        <div style={{ padding: '0 10px 10px' }}>
+          <NavLink
+            to="/voting-day-poll"
+            className={({ isActive }) => `sb-poll-btn${isActive ? ' active' : ''}`}
+          >
+            <Radio size={15} />
+            Voting Day Poll
+          </NavLink>
+        </div>
+
+        {/* User section */}
+        <div
+          className="flex-shrink-0"
+          style={{
+            padding: '10px 10px 10px',
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+          }}
         >
-          <LogOut size={13} />
-          Sign out
-        </button>
-      </div>
-    </aside>
+          <div
+            className="flex items-center gap-3"
+            style={{
+              padding: '9px 12px',
+              borderRadius: 10,
+              background: 'rgba(255,255,255,0.04)',
+              marginBottom: 4,
+            }}
+          >
+            <div
+              className="flex items-center justify-center flex-shrink-0"
+              style={{
+                width: 32, height: 32,
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, #5B5CEB, #818CF8)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 700,
+              }}
+            >
+              {(user?.name?.[0] ?? 'A').toUpperCase()}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ color: '#E2E4F0', fontSize: 12, fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.name ?? 'Admin'}
+              </p>
+              <p style={{ color: 'rgba(210,213,235,0.28)', fontSize: 10, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.email ?? ''}
+              </p>
+            </div>
+          </div>
+          <button
+            className="sb-logout"
+            onClick={() => { logout(); navigate('/login') }}
+          >
+            <LogOut size={13} />
+            Sign out
+          </button>
+        </div>
+      </aside>
+    </>
   )
 }
