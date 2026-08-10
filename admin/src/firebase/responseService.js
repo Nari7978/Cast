@@ -86,7 +86,7 @@ export async function fetchResponsesData() {
 
     // Build answers array from answers object + survey questions
     const answersObj = d.answers || {}
-    const answers = survey.questions.length
+    const answers = (survey.questions || []).length
       ? survey.questions.map(q => ({
           questionText: q.text || q.label || q.question || String(q.id),
           answer: Array.isArray(answersObj[q.id]) ? answersObj[q.id].join(', ') : (answersObj[q.id] ?? '—'),
