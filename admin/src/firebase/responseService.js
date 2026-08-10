@@ -74,20 +74,21 @@ export async function fetchResponsesData() {
 
   // Enrich responses
   const rawResp = respRes.data || []
+  const fallbackPhase = phases.find(p => p.status === 'Active') || null
   const responses = rawResp.map((row, idx) => {
     const d = row.data || {}
     const voter   = voterMap[d.voterId]   || {}
     const boothNo = String(d.boothNo || voter.boothNo || '')
     const booth   = boothMap[boothNo]     || {}
     const survey  = surveyMap[d.surveyId] || {}
-    const phase   = phaseMap[d.phaseId] || surveyPhaseMap[d.surveyId] || null
+    const phase   = phaseMap[d.phaseId] || surveyPhaseMap[d.surveyId] || fallbackPhase || null
 
     // Build answers array from answers object + survey questions
     const answersObj = d.answers || {}
     const answers = survey.questions.length
       ? survey.questions.map(q => ({
           questionText: q.text || q.label || q.question || String(q.id),
-          answer: answersObj[q.id] ?? '—',
+          answer: Array.isArray(answersObj[q.id]) ? answersObj[q.id].join(', ') : (answersObj[q.id] ?? '—'),
         }))
       : Object.entries(answersObj).map(([k, v]) => ({ questionText: k, answer: String(v) }))
 
