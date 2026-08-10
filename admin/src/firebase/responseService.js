@@ -80,7 +80,7 @@ export async function fetchResponsesData() {
     const boothNo = String(d.boothNo || voter.boothNo || '')
     const booth   = boothMap[boothNo]     || {}
     const survey  = surveyMap[d.surveyId] || {}
-    const phase   = surveyPhaseMap[d.surveyId] || null
+    const phase   = phaseMap[d.phaseId] || surveyPhaseMap[d.surveyId] || null
 
     // Build answers array from answers object + survey questions
     const answersObj = d.answers || {}
