@@ -32,7 +32,11 @@ export function stopSyncListener() {
 }
 
 export function startRealtimeSync(boothNo) {
-  if (realtimeChannel) return
+  // Tear down any existing (possibly dead) channel before resubscribing
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel)
+    realtimeChannel = null
+  }
 
   realtimeChannel = supabase
     .channel('cast-live')

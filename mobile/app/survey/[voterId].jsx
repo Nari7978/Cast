@@ -218,17 +218,7 @@ export default function SurveyScreen() {
   const voter    = voters.find(v => v.id === voterId)
   const existing = responses[voterId]
 
-  const questions = useMemo(() => {
-    if (!activeSurvey?.questions?.length) {
-      return [
-        { id: 'q1', type: 'single',   label: 'Is the voter available?', options: ['Yes', 'No', 'Not Home'] },
-        { id: 'q2', type: 'single',   label: 'Primary issue in the area?', options: ['Roads', 'Water', 'Electricity', 'Education', 'Healthcare', 'Other'] },
-        { id: 'q3', type: 'multiple', label: 'Concerns (select all that apply):', options: ['Unemployment', 'Safety', 'Cleanliness', 'Public Transport', 'Housing'] },
-        { id: 'q4', type: 'text',     label: 'Additional comments:' },
-      ]
-    }
-    return activeSurvey.questions
-  }, [activeSurvey])
+  const questions = useMemo(() => activeSurvey?.questions || [], [activeSurvey])
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answers,      setAnswers]       = useState(existing?.answers || {})
@@ -278,8 +268,37 @@ export default function SurveyScreen() {
 
   if (!voter) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
         <Text style={{ color: theme.textSub }}>Voter not found</Text>
+      </View>
+    )
+  }
+
+  if (questions.length === 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
+        <View style={[styles.header, { paddingTop: 8 }]}>
+          <View style={styles.headerTop}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Ionicons name="chevron-back" size={22} color={theme.text} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Survey</Text>
+            <View style={{ width: 36 }} />
+          </View>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Ionicons name="document-outline" size={56} color={theme.border} />
+          <Text style={{ fontSize: 17, fontWeight: '800', color: theme.text, marginTop: 16, marginBottom: 8 }}>No Survey Active</Text>
+          <Text style={{ fontSize: 14, color: theme.textSub, textAlign: 'center', lineHeight: 21 }}>
+            The admin hasn't set up a survey yet.{'\n'}Please check back later.
+          </Text>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{ marginTop: 28, backgroundColor: theme.primary, borderRadius: 14, paddingHorizontal: 28, paddingVertical: 14 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     )
   }
