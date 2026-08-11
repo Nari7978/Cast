@@ -32,7 +32,7 @@ function buildTrend15(responses) {
   if (!responses || responses.length === 0) return []
   const buckets = {}
   responses.forEach(r => {
-    const raw = r.submittedAt || r.submitted_at || r.inserted_at
+    const raw = r.recordedAt || r.submittedAt || r.submitted_at || r.inserted_at
     if (!raw) return
     const d = new Date(raw)
     if (isNaN(d)) return
@@ -56,7 +56,7 @@ function ResponseTrend15({ responses, options }) {
     if (!hasData || !options?.length) return []
     const buckets = {}
     responses.forEach(r => {
-      const raw = r.submittedAt || r.submitted_at || r.inserted_at
+      const raw = r.recordedAt || r.submittedAt || r.submitted_at || r.inserted_at
       if (!raw) return
       const d = new Date(raw)
       if (isNaN(d)) return

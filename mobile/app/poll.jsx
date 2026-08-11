@@ -16,7 +16,6 @@ const OPTION_COLORS = [
 ]
 
 export default function PollScreen() {
-  const insets  = useRouter()
   const router  = useRouter()
   const top     = useSafeAreaInsets().top
   const { agent, activePoll } = useStore()

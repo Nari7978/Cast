@@ -185,11 +185,11 @@ export default function Voters() {
       setTimeout(() => setCloudStatus('idle'), 3000)
     }).catch(err => {
       const msg = err?.code === 'permission-denied'
-        ? 'Firebase permission denied — go to Firestore Console → Rules and set: allow read, write: if true;'
-        : `Firebase error: ${err?.message || err}`
+        ? 'Supabase permission denied — check Row Level Security policies in your Supabase dashboard.'
+        : `Upload error: ${err?.message || err}`
       setCloudError(msg)
       setCloudStatus('error')
-      console.error('[Voters] Firebase write failed:', err)
+      console.error('[Voters] Upload failed:', err)
     })
   }, [])
 

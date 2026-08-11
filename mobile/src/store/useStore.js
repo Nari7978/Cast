@@ -26,8 +26,8 @@ export const useStore = create((set, get) => ({
   },
 
   logout: async () => {
-    await AsyncStorage.multiRemove([AGENT_KEY])
-    set({ agent: null, isAuthenticated: false })
+    await AsyncStorage.multiRemove([AGENT_KEY, PENDING_KEY])
+    set({ agent: null, isAuthenticated: false, responses: {}, pendingResponses: [] })
   },
 
   // ── Survey / Phase ────────────────────────────────────────────────────
@@ -69,12 +69,17 @@ export const useStore = create((set, get) => ({
   },
 
   markSynced: async (voterId) => {
-    const { pendingResponses } = get()
+    const { pendingResponses, responses } = get()
     const updated = pendingResponses.map(r =>
       r.voterId === voterId ? { ...r, synced: true } : r
     )
     await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(updated))
-    set({ pendingResponses: updated })
+    set({
+      pendingResponses: updated,
+      responses: responses[voterId]
+        ? { ...responses, [voterId]: { ...responses[voterId], synced: true } }
+        : responses,
+    })
   },
 
   getResponseStatus: (voterId) => {

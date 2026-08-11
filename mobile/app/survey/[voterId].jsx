@@ -11,12 +11,21 @@ import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
 import { syncPending } from '../../src/services/sync'
 
-const vName      = v => v.VOTER_NAME   || v.ELECTOR_NAME  || v.elector_name || v.name       || v.voterName   || v.voter_name   || ''
-const vId        = v => v.VOTER_ID     || v.EPIC_NO       || v.epicNo       || v.voterId    || v.voter_id    || ''
-const vFather    = v => v.FATHER_NAME  || v.FATHER        || v.fatherName   || v.father_name || ''
-const vAge       = v => v.AGE          || v.age           || ''
-const vGender    = v => v.GENDER       || v.SEX           || v.gender       || v.sex         || ''
-const vHouseNo   = v => v.HOUSE_NO     || v.HOUSENO       || v.houseNo      || v.house_no    || ''
+const vName    = v => v.VOTER_NAME || v.ELECTOR_NAME || v.elector_name || v.name      || v.voterName  || v.voter_name  || ''
+const vId      = v => v.VOTER_ID   || v.EPIC_NO      || v.epicNo       || v.voterId   || v.voter_id   || ''
+const vAge     = v => v.AGE        || v.age          || ''
+const vGender  = v => v.GENDER     || v.SEX          || v.gender       || v.sex       || ''
+const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO      || v.houseNo      || v.house_no  || ''
+
+// Returns whichever relation field has a value (priority: Father → Husband → Mother → Other)
+function vRelation(v) {
+  return (
+    v.FATHER_NAME         || v.fatherName        || v.father_name         ||
+    v.HUSBAND_NAME        || v.husbandName       || v.husband_name        ||
+    v.MOTHER_NAME         || v.motherName        || v.mother_name         ||
+    v.OTHER_RELATION_NAME || v.otherRelationName || v.other_relation_name || ''
+  )
+}
 
 // ── Question Renderer ────────────────────────────────────────────────────────
 
@@ -224,15 +233,24 @@ export default function SurveyScreen() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answers,      setAnswers]       = useState(existing?.answers || {})
   const [submitted,    setSubmitted]     = useState(!!existing?.submittedAt)
+  const [requiredErr,  setRequiredErr]   = useState(false)
 
   const question  = questions[currentIndex]
   const progress  = ((currentIndex + 1) / questions.length) * 100
   const isLast    = currentIndex === questions.length - 1
   const answer    = answers[question?.id]
 
-  const setAnswer = (val) => setAnswers(a => ({ ...a, [question.id]: val }))
+  const setAnswer = (val) => { setRequiredErr(false); setAnswers(a => ({ ...a, [question.id]: val })) }
+
+  function isAnswered(q, ans) {
+    const v = ans[q?.id]
+    if (v === undefined || v === null || v === '') return false
+    if (Array.isArray(v)) return v.length > 0
+    return true
+  }
 
   const handleSubmit = async () => {
+    if (question?.required && !isAnswered(question, answers)) { setRequiredErr(true); return }
     const response = {
       localId:     uuid.v4(),
       voterId,
@@ -249,6 +267,8 @@ export default function SurveyScreen() {
   }
 
   const goNext = () => {
+    if (question?.required && !isAnswered(question, answers)) { setRequiredErr(true); return }
+    setRequiredErr(false)
     if (!isLast) setCurrentIndex(i => i + 1)
   }
 
@@ -302,10 +322,10 @@ export default function SurveyScreen() {
               </View>
               <View>
                 <Text style={styles.voterName}>{vName(voter) || '—'}</Text>
-                {!!vFather(voter) && (
+                {!!vRelation(voter) && (
                   <View style={styles.voterMeta}>
                     <Ionicons name="person-outline" size={11} color={theme.textMuted} />
-                    <Text style={styles.voterMetaText}>{vFather(voter)}</Text>
+                    <Text style={styles.voterMetaText}>{vRelation(voter)}</Text>
                   </View>
                 )}
                 <View style={styles.voterMeta}>
@@ -327,7 +347,11 @@ export default function SurveyScreen() {
               <Text style={styles.questionBadgeText}>Q{currentIndex + 1}</Text>
             </View>
             <Text style={styles.questionText}>{question?.label || question?.question || '—'}</Text>
-            {question?.required && <Text style={styles.required}>* Required</Text>}
+            {question?.required && (
+              <Text style={[styles.required, requiredErr && { fontWeight: '700' }]}>
+                {requiredErr ? '⚠ This question is required' : '* Required'}
+              </Text>
+            )}
 
             <View style={{ marginTop: 16 }}>
               <QuestionRenderer question={question} value={answer} onChange={setAnswer} />

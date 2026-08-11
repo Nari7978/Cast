@@ -232,15 +232,19 @@ export default function VotersScreen() {
   const [voters,     setVoters]     = useState([])
   const [loading,    setLoading]    = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [fetchErr,   setFetchErr]   = useState(null)
   const [search,     setSearch]     = useState('')
   const [selected,   setSelected]   = useState(null)
 
   const load = useCallback(async () => {
     if (!agent?.boothNo) { setLoading(false); return }
+    setFetchErr(null)
     try {
       const data = await fetchVotersForBooth(agent.boothNo)
       setVoters(data)
-    } catch (_) {}
+    } catch (e) {
+      setFetchErr('Could not load voters. Pull down to retry.')
+    }
     setLoading(false)
     setRefreshing(false)
   }, [agent?.boothNo])
@@ -299,6 +303,13 @@ export default function VotersScreen() {
           )}
         </View>
       </View>
+
+      {!!fetchErr && (
+        <View style={styles.errorBanner}>
+          <Ionicons name="wifi-outline" size={14} color="#B91C1C" />
+          <Text style={styles.errorText}>{fetchErr}</Text>
+        </View>
+      )}
 
       <FlatList
         data={filtered}
@@ -399,4 +410,11 @@ const styles = StyleSheet.create({
 
   statusBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
   statusText:  { fontSize: 11, fontWeight: '700' },
+
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#FEE2E2', paddingHorizontal: 16, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: '#FECACA',
+  },
+  errorText: { fontSize: 13, color: '#B91C1C', fontWeight: '600', flex: 1 },
 })
