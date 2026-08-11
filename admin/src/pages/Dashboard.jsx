@@ -32,9 +32,8 @@ export default function Dashboard() {
 
   async function loadStats() {
     setLoading(true)
-    const [boothsRes, voterImportRes, agentsRes, surveysRes, phasesRes, assignmentsRes, responsesRes, votersRes] = await Promise.all([
+    const [boothsRes, agentsRes, surveysRes, phasesRes, assignmentsRes, responsesRes, votersRes] = await Promise.all([
       supabase.from('booths').select('boothNo, voterCount, pollingStation'),
-      supabase.from('voter_imports').select('data').eq('id', 'latest').single(),
       supabase.from('agents').select('data, inserted_at').order('inserted_at', { ascending: false }),
       supabase.from('surveys').select('data, inserted_at').order('inserted_at', { ascending: false }),
       supabase.from('phases').select('data, inserted_at').order('inserted_at', { ascending: false }),
@@ -44,7 +43,6 @@ export default function Dashboard() {
     ])
 
     const booths      = boothsRes.data || []
-    const voterMeta   = voterImportRes.data?.data || null
     const agents      = (agentsRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
     const surveys     = (surveysRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
     const phases      = (phasesRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
@@ -62,7 +60,8 @@ export default function Dashboard() {
     const todayResponses = responses.filter(r => r.submittedAt && new Date(r.submittedAt).toDateString() === todayStr).length
 
     // ── Voter demographics ─────────────────────────────────────────────────
-    const totalVoters = voterMeta?.records || voters.length || 0
+    // Sum voterCount from booths table — accurate even with multi-booth CSV imports
+    const totalVoters = booths.reduce((sum, b) => sum + (b.voterCount || 0), 0) || voters.length
 
     let maleCount = 0, femaleCount = 0, otherCount = 0
     const ageBuckets = { '18–25': 0, '26–35': 0, '36–45': 0, '46–60': 0, '60+': 0 }
@@ -154,7 +153,8 @@ export default function Dashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'responses' },   loadStats)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' },       loadStats)
       .subscribe()
-    return () => supabase.removeChannel(channel)
+    const poll = setInterval(loadStats, 30000)
+    return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [])
 
   const syncLabel = synced
