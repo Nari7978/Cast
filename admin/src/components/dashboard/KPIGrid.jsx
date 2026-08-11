@@ -51,8 +51,8 @@ export default function KPIGrid({ stats }) {
     },
     {
       title: 'Total Responses',
-      value: '—',
-      desc: 'No responses collected yet',
+      value: stats?.totalResponses !== undefined ? fmt(stats.totalResponses) : '—',
+      desc: stats?.totalResponses ? `${stats.totalResponses} responses collected` : 'No responses collected yet',
       icon: MessageSquare, color: '#8B5CF6', bg: '#F5F3FF', link: '/responses',
     },
     {
@@ -63,8 +63,8 @@ export default function KPIGrid({ stats }) {
     },
     {
       title: "Today's Responses",
-      value: '—',
-      desc: 'No response data yet',
+      value: stats?.todayResponses !== undefined ? String(stats.todayResponses) : '—',
+      desc: stats?.todayResponses ? `${stats.todayResponses} submitted today` : 'No submissions today',
       icon: Activity, color: '#EC4899', bg: '#FDF2F8', link: '/responses',
     },
     {
