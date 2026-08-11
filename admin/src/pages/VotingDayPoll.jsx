@@ -235,13 +235,16 @@ function PollModal({ initial, onClose, onSave }) {
         if (imgData.file) {
           const ext  = imgData.file.name.split('.').pop() || 'jpg'
           const path = `${Date.now()}-${idxStr}.${ext}`
-          const { error } = await supabase.storage
+          const { error: uploadErr } = await supabase.storage
             .from('poll-images')
             .upload(path, imgData.file, { upsert: true, contentType: imgData.file.type })
-          if (!error) {
-            const { data: { publicUrl } } = supabase.storage.from('poll-images').getPublicUrl(path)
-            uploadedImages[label] = publicUrl
+          if (uploadErr) {
+            setErr(`Image upload failed: ${uploadErr.message}. Make sure the "poll-images" bucket exists in Supabase Storage (set it to Public).`)
+            setSaving(false)
+            return
           }
+          const { data: { publicUrl } } = supabase.storage.from('poll-images').getPublicUrl(path)
+          uploadedImages[label] = publicUrl
         } else if (imgData.url) {
           uploadedImages[label] = imgData.url
         }
