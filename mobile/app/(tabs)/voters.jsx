@@ -10,27 +10,35 @@ import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
 import { fetchVotersForBooth } from '../../src/services/sync'
 
-// CSV column order and friendly labels
+// CSV column order — each entry lists all key variants (uppercase CSV + camelCase legacy)
 const CSV_FIELDS = [
-  { key: 'SNO',              label: 'S.No'            },
-  { key: 'VOTER_ID',         label: 'Voter ID'        },
-  { key: 'VOTER_NAME',       label: 'Voter Name'      },
-  { key: 'FATHER_NAME',      label: "Father's Name"   },
-  { key: 'AGE',              label: 'Age'             },
-  { key: 'GENDER',           label: 'Gender'          },
-  { key: 'HOUSE_NO',         label: 'House No'        },
-  { key: 'POLLING_STATION',  label: 'Polling Station' },
-  { key: 'BOOTH_NO',         label: 'Booth No'        },
+  { keys: ['SNO', 'sno', 'SNo'],                                                  label: 'S.No'            },
+  { keys: ['VOTER_ID', 'voterId', 'voter_id', 'EPIC_NO', 'epicNo', 'VOTER ID'],   label: 'Voter ID'        },
+  { keys: ['VOTER_NAME', 'voterName', 'voter_name', 'name', 'VOTER NAME'],        label: 'Voter Name'      },
+  { keys: ['FATHER_NAME', 'fatherName', 'father_name', 'FATHER NAME'],            label: "Father's Name"   },
+  { keys: ['AGE', 'age'],                                                          label: 'Age'             },
+  { keys: ['GENDER', 'gender'],                                                    label: 'Gender'          },
+  { keys: ['HOUSE_NO', 'houseNo', 'house_no', 'HOUSENO', 'HOUSE NO'],             label: 'House No'        },
+  { keys: ['POLLING_STATION', 'pollingStation', 'polling_station', 'POLLING STATION'], label: 'Polling Station' },
+  { keys: ['BOOTH_NO', 'boothNo_csv', 'BOOTH NO'],                                label: 'Booth No'        },
 ]
-const KNOWN_KEYS  = new Set(CSV_FIELDS.map(f => f.key))
+
+// All known key variants (to avoid duplicating in extraFields)
+const KNOWN_KEYS  = new Set(CSV_FIELDS.flatMap(f => f.keys))
 const HIDDEN_KEYS = new Set(['id', 'boothNo', 'boothno', 'inserted_at', 'updatedAt'])
 
-// Voter field helpers
-const vName    = v => v.VOTER_NAME || v.name    || ''
-const vId      = v => v.VOTER_ID   || v.EPIC_NO || v.epicNo || ''
-const vAge     = v => v.AGE        || v.age     || ''
-const vGender  = v => v.GENDER     || v.gender  || ''
-const vHouseNo = v => v.HOUSE_NO   || v.HOUSENO || v.houseNo || ''
+// Pick the first matching key variant from a voter object
+function pick(voter, ...keys) {
+  for (const k of keys) { const v = voter[k]; if (v !== undefined && v !== null && v !== '') return String(v) }
+  return ''
+}
+
+// Voter field helpers — handle both uppercase CSV and legacy camelCase
+const vName    = v => pick(v, 'VOTER_NAME', 'voterName', 'voter_name', 'name')
+const vId      = v => pick(v, 'VOTER_ID', 'voterId', 'voter_id', 'EPIC_NO', 'epicNo', 'VOTER ID')
+const vAge     = v => pick(v, 'AGE', 'age')
+const vGender  = v => pick(v, 'GENDER', 'gender')
+const vHouseNo = v => pick(v, 'HOUSE_NO', 'houseNo', 'house_no', 'HOUSENO')
 
 const GENDER_COLOR = {
   Male: '#3B82F6', MALE: '#3B82F6', M: '#3B82F6',
@@ -39,7 +47,7 @@ const GENDER_COLOR = {
 }
 
 // ── Voter detail bottom sheet ───────────────────────────────────────────────────
-function VoterDetailModal({ voter, response, onClose }) {
+function VoterDetailModal({ voter, response, questions, onClose }) {
   const insets = useSafeAreaInsets()
   if (!voter) return null
 
@@ -48,16 +56,25 @@ function VoterDetailModal({ voter, response, onClose }) {
   const gColor   = GENDER_COLOR[gender] || theme.primary
   const initials = name ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() : '?'
 
-  // Build ordered field list: known CSV keys first, then any extra keys
+  // Build ordered field list using all key variants per field
   const knownFields = CSV_FIELDS
-    .map(f => ({ label: f.label, value: voter[f.key] }))
-    .filter(f => f.value !== undefined && f.value !== null && f.value !== '')
+    .map(f => {
+      const value = pick(voter, ...f.keys)
+      return value ? { label: f.label, value } : null
+    })
+    .filter(Boolean)
 
+  // Collect all keys already shown above
+  const shownKeys = new Set(CSV_FIELDS.flatMap(f => f.keys))
   const extraFields = Object.entries(voter)
-    .filter(([k, v]) => !KNOWN_KEYS.has(k) && !HIDDEN_KEYS.has(k) && !HIDDEN_KEYS.has(k.toLowerCase()) && v !== '' && v !== null && v !== undefined)
+    .filter(([k, v]) => !shownKeys.has(k) && !HIDDEN_KEYS.has(k) && !HIDDEN_KEYS.has(k.toLowerCase()) && v !== '' && v !== null && v !== undefined)
     .map(([k, v]) => ({ label: k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: String(v) }))
 
   const allFields = [...knownFields, ...extraFields]
+
+  // Build question ID → text map for readable survey answers
+  const qTextMap = {}
+  ;(questions || []).forEach(q => { qTextMap[q.id] = q.text || q.label || q.question || q.id })
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
@@ -118,11 +135,11 @@ function VoterDetailModal({ voter, response, onClose }) {
                     </View>
                   )}
                   {response.answers && Object.keys(response.answers).length > 0 && (
-                    Object.entries(response.answers).map(([qId, ans], i) => (
-                      <View key={qId} style={[styles.fieldRow, i === Object.keys(response.answers).length - 1 && { borderBottomWidth: 0 }]}>
-                        <Text style={[styles.fieldLabel, { flex: 1.2 }]}>{qId}</Text>
+                    Object.entries(response.answers).map(([qId, ans], i, arr) => (
+                      <View key={qId} style={[styles.fieldRow, { alignItems: 'flex-start' }, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
+                        <Text style={[styles.fieldLabel, { flex: 1.2, paddingTop: 2 }]}>{qTextMap[qId] || qId}</Text>
                         <Text style={[styles.fieldValue, { flex: 1.8 }]}>
-                          {Array.isArray(ans) ? ans.join(', ') : String(ans || '—')}
+                          {Array.isArray(ans) ? ans.join(', ') : String(ans ?? '') || '—'}
                         </Text>
                       </View>
                     ))
@@ -189,8 +206,9 @@ function MetaChip({ icon, text }) {
 // ── Screen ─────────────────────────────────────────────────────────────────────
 export default function VotersScreen() {
   const insets    = useSafeAreaInsets()
-  const agent     = useStore(s => s.agent)
-  const responses = useStore(s => s.responses)
+  const agent        = useStore(s => s.agent)
+  const responses    = useStore(s => s.responses)
+  const activeSurvey = useStore(s => s.activeSurvey)
 
   const [voters,     setVoters]     = useState([])
   const [loading,    setLoading]    = useState(true)
@@ -287,6 +305,7 @@ export default function VotersScreen() {
       <VoterDetailModal
         voter={selected}
         response={selected ? responses[selected.id] : null}
+        questions={activeSurvey?.questions || []}
         onClose={() => setSelected(null)}
       />
     </View>
