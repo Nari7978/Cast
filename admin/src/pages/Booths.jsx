@@ -5,8 +5,8 @@ import {
   AlertCircle, Eye, Edit2, Trash2, X, ChevronDown,
   Building2, Phone, ChevronLeft, ChevronRight, Loader2,
 } from 'lucide-react'
-import { fetchAllBooths } from '../firebase/voterService'
-import { subscribeAgents } from '../firebase/agentService'
+import { fetchAllBooths } from '../services/voterService'
+import { subscribeAgents } from '../services/agentService'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

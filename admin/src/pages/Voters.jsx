@@ -9,7 +9,7 @@ import {
   uploadBooths, clearBooths, uploadVoters, clearVoters,
   saveImportMeta,
   deleteImportMeta,
-} from '../firebase/voterService'
+} from '../services/voterService'
 import { clearFsCache } from '../utils/fsCache'
 import {
   cacheVoters, loadCachedVoters,

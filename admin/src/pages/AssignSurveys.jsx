@@ -6,11 +6,11 @@ import {
   Calendar, FileText, Target, AlertCircle, Loader2,
 } from 'lucide-react'
 
-import { subscribePhases } from '../firebase/phaseService'
-import { subscribeSurveyForms } from '../firebase/surveyService'
-import { subscribeAssignments, createAssignment, deleteAssignment as deleteAssignmentSvc } from '../firebase/assignmentService'
-import { fetchAllBooths } from '../firebase/voterService'
-import { subscribeAgents } from '../firebase/agentService'
+import { subscribePhases } from '../services/phaseService'
+import { subscribeSurveyForms } from '../services/surveyService'
+import { subscribeAssignments, createAssignment, deleteAssignment as deleteAssignmentSvc } from '../services/assignmentService'
+import { fetchAllBooths } from '../services/voterService'
+import { subscribeAgents } from '../services/agentService'
 
 
 

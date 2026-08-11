@@ -35,8 +35,8 @@ const STATUS_CFG = {
 
 const CATEGORIES = ['Outreach', 'Issue Collection', 'Verification', 'Feedback', 'Exit Poll', 'Other']
 
-import { subscribeSurveyForms, createSurveyForm, updateSurveyForm, deleteSurveyForm } from '../firebase/surveyService'
-import { subscribePhases } from '../firebase/phaseService'
+import { subscribeSurveyForms, createSurveyForm, updateSurveyForm, deleteSurveyForm } from '../services/surveyService'
+import { subscribePhases } from '../services/phaseService'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

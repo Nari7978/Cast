@@ -6,9 +6,9 @@ import {
   Copy, Check, KeyRound,
 } from 'lucide-react'
 
-import { subscribeAgents, createAgent, updateAgent, deleteAgent as deleteAgentSvc } from '../firebase/agentService'
-import { fetchAllBooths } from '../firebase/voterService'
-import { subscribePhases } from '../firebase/phaseService'
+import { subscribeAgents, createAgent, updateAgent, deleteAgent as deleteAgentSvc } from '../services/agentService'
+import { fetchAllBooths } from '../services/voterService'
+import { subscribePhases } from '../services/phaseService'
 
 const generatePIN = () => String(Math.floor(1000 + Math.random() * 9000))
 const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', boothNo: '', phaseId: '', status: 'Active', notes: '', pin: generatePIN() }

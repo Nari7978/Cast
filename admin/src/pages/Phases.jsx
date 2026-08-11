@@ -8,8 +8,8 @@ import {
   Target, TrendingUp, Activity, Layers,
 } from 'lucide-react'
 
-import { subscribePhases, createPhase, updatePhase, deletePhase } from '../firebase/phaseService'
-import { subscribeSurveyForms } from '../firebase/surveyService'
+import { subscribePhases, createPhase, updatePhase, deletePhase } from '../services/phaseService'
+import { subscribeSurveyForms } from '../services/surveyService'
 
 const STATUS_CONFIG = {
   Active:    { color: '#10B981', bg: '#ECFDF5', icon: Activity,      label: 'Active'    },

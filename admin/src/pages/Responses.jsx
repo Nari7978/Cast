@@ -5,7 +5,7 @@ import {
   User, MapPin, Calendar, Building2, ClipboardList, MessageSquare,
   Layers, Activity, CheckCircle2, Hash, Loader2, AlertTriangle,
 } from 'lucide-react'
-import { fetchResponsesData, deleteResponse } from '../firebase/responseService'
+import { fetchResponsesData, deleteResponse } from '../services/responseService'
 
 const PHASE_COLORS = ['#5B5CEB','#10B981','#F59E0B','#8B5CF6','#EF4444','#3B82F6','#EC4899']
 

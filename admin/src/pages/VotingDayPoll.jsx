@@ -3,7 +3,7 @@ import { supabase } from '../supabase/config'
 import {
   fetchPolls, createPoll, updatePoll, deletePoll,
   setActivePoll, deactivateAllPolls, fetchPollResponses, clearPollResponses,
-} from '../firebase/pollService'
+} from '../services/pollService'
 import { Vote, Plus, Trash2, Play, Square, RefreshCw, BarChart2, X, Radio, Download, Trophy, TrendingUp, Camera } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
