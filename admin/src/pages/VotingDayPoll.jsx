@@ -175,7 +175,7 @@ function PollModal({ initial, onClose, onSave }) {
 
 // ── Export CSV ────────────────────────────────────────────────────────────────
 
-function exportCSV(poll, responses, options, counts, boothRanked) {
+function exportCSV(poll, responses, options, counts, boothRanked, boothVoterMap) {
   const total = responses.length
   const rows = []
 
@@ -194,16 +194,17 @@ function exportCSV(poll, responses, options, counts, boothRanked) {
   })
   rows.push([])
 
-  // Booth ranking
+  // Booth ranking with voter coverage
   rows.push(['BOOTH PERFORMANCE RANKING'])
-  rows.push(['Rank', 'Booth', ...options, 'Total', 'Completion %'])
+  rows.push(['Rank', 'Booth', ...options, 'Responses', 'Total Voters', 'Coverage %'])
   boothRanked.forEach((entry, idx) => {
-    const boothTotal = Object.values(entry.tally).reduce((s, n) => s + n, 0)
-    const boothPct   = total > 0 ? `${Math.round((boothTotal / total) * 100)}%` : '0%'
-    rows.push([`#${idx + 1}`, `Booth ${entry.booth}`, ...options.map(o => entry.tally[o] || 0), boothTotal, boothPct])
+    const boothTotal   = Object.values(entry.tally).reduce((s, n) => s + n, 0)
+    const voterCount   = boothVoterMap?.[String(entry.booth)] ?? ''
+    const coveragePct  = voterCount ? `${Math.round((boothTotal / voterCount) * 100)}%` : '—'
+    rows.push([`#${idx + 1}`, `Booth ${entry.booth}`, ...options.map(o => entry.tally[o] || 0), boothTotal, voterCount, coveragePct])
   })
 
-  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
@@ -217,7 +218,7 @@ const RANK_MEDAL = { 0: '🥇', 1: '🥈', 2: '🥉' }
 
 // ── Results panel ─────────────────────────────────────────────────────────────
 
-function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
+function ResultsPanel({ poll, responses, boothVoterMap = {}, onClear, onRefresh, refreshing }) {
   const options = poll.options || []
   const counts  = tallyResponses(responses, options)
   const total   = responses.length
@@ -253,7 +254,7 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => exportCSV(poll, responses, options, counts, boothRanked)}
+            onClick={() => exportCSV(poll, responses, options, counts, boothRanked, boothVoterMap)}
             title="Export to CSV"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold text-indigo-600 border-indigo-200 hover:bg-indigo-50 transition-colors">
             <Download size={13} /> Export
@@ -302,10 +303,15 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
         ) : (
           <div className="space-y-2">
             {boothRanked.map((entry, idx) => {
-              const share = total > 0 ? Math.round((entry.total / total) * 100) : 0
-              const leadingOpt = options.reduce((best, o) =>
+              const voterCount   = boothVoterMap[String(entry.booth)]
+              const coverage     = voterCount ? Math.round((entry.total / voterCount) * 100) : null
+              const leadingOpt   = options.reduce((best, o) =>
                 (entry.tally[o] || 0) > (entry.tally[best] || 0) ? o : best, options[0])
               const leadingColor = COLORS[options.indexOf(leadingOpt) % COLORS.length]
+              const lagColor     = coverage === null ? '#94A3B8'
+                                 : coverage >= 70   ? '#10B981'
+                                 : coverage >= 40   ? '#F59E0B'
+                                 :                    '#EF4444'
               return (
                 <div key={entry.booth}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
@@ -317,7 +323,7 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
                       : <span className="text-xs font-black text-gray-400">#{idx + 1}</span>
                     }
                   </div>
-                  {/* Booth name */}
+                  {/* Booth name + leading option */}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-gray-800">Booth {entry.booth}</p>
                     <p className="text-[10px] text-gray-400 mt-0.5">
@@ -325,16 +331,23 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
                       {' · '}{options.map(o => `${o}: ${entry.tally[o] || 0}`).join('  ')}
                     </p>
                   </div>
-                  {/* Bar + count */}
-                  <div className="w-28 flex-shrink-0">
-                    <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-                      <span className="font-semibold">{share}% share</span>
-                      <span className="font-black text-gray-800">{entry.total}</span>
+                  {/* Coverage bar */}
+                  <div className="w-36 flex-shrink-0">
+                    <div className="flex justify-between text-[10px] mb-1">
+                      <span className="font-bold tabular-nums" style={{ color: lagColor }}>
+                        {entry.total}{voterCount ? ` / ${voterCount}` : ''} voters
+                      </span>
+                      {coverage !== null && (
+                        <span className="font-black text-[10px]" style={{ color: lagColor }}>{coverage}%</span>
+                      )}
                     </div>
                     <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full"
-                        style={{ width: `${share}%`, background: leadingColor }} />
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${coverage ?? 0}%`, background: lagColor }} />
                     </div>
+                    {coverage !== null && coverage < 40 && (
+                      <p className="text-[9px] font-bold mt-0.5" style={{ color: '#EF4444' }}>⚠ Lagging</p>
+                    )}
                   </div>
                 </div>
               )
@@ -352,20 +365,27 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
           <div className="max-h-64 overflow-y-auto">
             {/* Header row */}
             <div className="grid text-[10px] font-semibold text-gray-400 uppercase tracking-wide pb-2 border-b sticky top-0 bg-white"
-              style={{ gridTemplateColumns: `90px repeat(${options.length}, 1fr) 60px` }}>
+              style={{ gridTemplateColumns: `80px repeat(${options.length}, 1fr) 50px 90px` }}>
               <span>Booth</span>
               {options.map((o, i) => (
                 <span key={o} style={{ color: COLORS[i % COLORS.length] }} className="text-center">{o}</span>
               ))}
               <span className="text-right">Total</span>
+              <span className="text-right">Coverage</span>
             </div>
 
             {boothEntries.map(([booth, tally]) => {
-              const boothTotal = Object.values(tally).reduce((s, n) => s + n, 0)
+              const boothTotal  = Object.values(tally).reduce((s, n) => s + n, 0)
+              const voterCount  = boothVoterMap[String(booth)]
+              const coverage    = voterCount ? Math.round((boothTotal / voterCount) * 100) : null
+              const coverageColor = coverage === null ? '#94A3B8'
+                                  : coverage >= 70   ? '#10B981'
+                                  : coverage >= 40   ? '#F59E0B'
+                                  :                    '#EF4444'
               return (
                 <div key={booth}
                   className="grid items-center py-2.5 border-b border-gray-50 last:border-0"
-                  style={{ gridTemplateColumns: `90px repeat(${options.length}, 1fr) 60px` }}>
+                  style={{ gridTemplateColumns: `80px repeat(${options.length}, 1fr) 50px 90px` }}>
                   <span className="text-xs font-bold text-gray-700">Booth {booth}</span>
                   {options.map((opt, i) => {
                     const n = tally[opt] || 0
@@ -377,13 +397,21 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
                     )
                   })}
                   <span className="text-right text-xs font-bold text-gray-500">{boothTotal}</span>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className="text-[10px] font-bold tabular-nums" style={{ color: coverageColor }}>
+                      {coverage !== null ? `${coverage}%` : '—'}
+                    </span>
+                    {voterCount && (
+                      <span className="text-[9px] text-gray-400">{boothTotal}/{voterCount}</span>
+                    )}
+                  </div>
                 </div>
               )
             })}
 
             {/* Total row */}
             <div className="grid items-center pt-2.5 mt-1 border-t-2 border-gray-200"
-              style={{ gridTemplateColumns: `90px repeat(${options.length}, 1fr) 60px` }}>
+              style={{ gridTemplateColumns: `80px repeat(${options.length}, 1fr) 50px 90px` }}>
               <span className="text-xs font-bold text-gray-900">TOTAL</span>
               {options.map((opt, i) => (
                 <span key={opt} className="text-center text-sm font-black tabular-nums"
@@ -392,6 +420,11 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
                 </span>
               ))}
               <span className="text-right text-xs font-black text-gray-900">{total}</span>
+              <span className="text-right text-[10px] font-bold text-gray-500">
+                {Object.keys(boothVoterMap).length > 0
+                  ? `${Math.round((total / Object.values(boothVoterMap).reduce((s, v) => s + v, 0)) * 100)}%`
+                  : '—'}
+              </span>
             </div>
           </div>
         )}
@@ -403,19 +436,28 @@ function ResultsPanel({ poll, responses, onClear, onRefresh, refreshing }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function VotingDayPoll() {
-  const [polls,      setPolls]      = useState([])
-  const [responses,  setResponses]  = useState({})
-  const [loading,    setLoading]    = useState(true)
-  const [modal,      setModal]      = useState(null)
-  const [activePoll, setActivePollState] = useState(null)
-  const [refreshing, setRefreshing] = useState({})
+  const [polls,          setPolls]          = useState([])
+  const [responses,      setResponses]      = useState({})
+  const [loading,        setLoading]        = useState(true)
+  const [modal,          setModal]          = useState(null)
+  const [activePoll,     setActivePollState] = useState(null)
+  const [refreshing,     setRefreshing]     = useState({})
+  const [boothVoterMap,  setBoothVoterMap]  = useState({})
   const channelRef = useRef(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      const ps = await fetchPolls()
+      const [ps, boothsRes] = await Promise.all([
+        fetchPolls(),
+        supabase.from('booths').select('boothNo, voterCount'),
+      ])
       setPolls(ps)
+      const bvMap = {}
+      ;(boothsRes.data || []).forEach(b => {
+        if (b.boothNo != null) bvMap[String(b.boothNo)] = b.voterCount || 0
+      })
+      setBoothVoterMap(bvMap)
       const active = ps.find(p => p.status === 'Active') || null
       setActivePollState(active)
       if (active) {
@@ -559,6 +601,7 @@ export default function VotingDayPoll() {
               <ResultsPanel
                 poll={activePoll}
                 responses={responses[activePoll.id] || []}
+                boothVoterMap={boothVoterMap}
                 onClear={() => handleClear(activePoll.id)}
                 onRefresh={() => handleRefresh(activePoll.id)}
                 refreshing={refreshing[activePoll.id] || false}
