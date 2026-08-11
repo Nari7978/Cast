@@ -83,8 +83,8 @@ function VoterDetailModal({ voter, response, questions, onClose }) {
     }
   }
 
-  // Collect all keys already shown above
-  const shownKeys = new Set(CSV_FIELDS.flatMap(f => f.keys))
+  // Collect all keys already shown above (including relation fields so they don't leak into extraFields)
+  const shownKeys = new Set([...CSV_FIELDS.flatMap(f => f.keys), ...RELATION_FIELDS.flatMap(f => f.keys)])
   const extraFields = Object.entries(voter)
     .filter(([k, v]) => !shownKeys.has(k) && !HIDDEN_KEYS.has(k) && !HIDDEN_KEYS.has(k.toLowerCase()) && v !== '' && v !== null && v !== undefined)
     .map(([k, v]) => ({ label: k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: String(v) }))
