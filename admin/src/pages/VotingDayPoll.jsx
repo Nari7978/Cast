@@ -4,7 +4,10 @@ import {
   fetchPolls, createPoll, updatePoll, deletePoll,
   setActivePoll, deactivateAllPolls, fetchPollResponses, clearPollResponses,
 } from '../firebase/pollService'
-import { Vote, Plus, Trash2, Play, Square, RefreshCw, BarChart2, X, Radio, Download, Trophy } from 'lucide-react'
+import { Vote, Plus, Trash2, Play, Square, RefreshCw, BarChart2, X, Radio, Download, Trophy, TrendingUp } from 'lucide-react'
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
 
 const COLORS = ['#5B5CEB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
 
@@ -21,6 +24,143 @@ function tallyResponses(responses, options) {
     else if (r.option) counts[r.option] = (counts[r.option] || 0) + 1
   })
   return counts
+}
+
+// ── 15-min response trend ─────────────────────────────────────────────────────
+
+function buildTrend15(responses) {
+  if (!responses || responses.length === 0) return []
+  const buckets = {}
+  responses.forEach(r => {
+    const raw = r.submittedAt || r.submitted_at || r.inserted_at
+    if (!raw) return
+    const d = new Date(raw)
+    if (isNaN(d)) return
+    d.setSeconds(0, 0)
+    d.setMinutes(Math.floor(d.getMinutes() / 15) * 15)
+    const key = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    buckets[key] = (buckets[key] || 0) + 1
+  })
+  return Object.entries(buckets)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([time, count]) => ({ time, count }))
+}
+
+function ResponseTrend15({ responses, options }) {
+  const trendData = buildTrend15(responses)
+  const hasData   = trendData.length > 0
+  const total     = responses.length
+
+  // Also build per-option trend
+  const optionTrendData = (() => {
+    if (!hasData || !options?.length) return []
+    const buckets = {}
+    responses.forEach(r => {
+      const raw = r.submittedAt || r.submitted_at || r.inserted_at
+      if (!raw) return
+      const d = new Date(raw)
+      if (isNaN(d)) return
+      d.setSeconds(0, 0)
+      d.setMinutes(Math.floor(d.getMinutes() / 15) * 15)
+      const key = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+      if (!buckets[key]) { buckets[key] = { time: key }; options.forEach(o => { buckets[key][o] = 0 }) }
+      const opt = r.option || r.answer || ''
+      if (opt && buckets[key][opt] !== undefined) buckets[key][opt]++
+    })
+    return Object.values(buckets).sort((a, b) => a.time.localeCompare(b.time))
+  })()
+
+  const showOptionBreakdown = options?.length <= 4 && optionTrendData.length > 0
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
+            <TrendingUp size={11} /> Response Trend
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {hasData ? `${total} responses · 15-min intervals` : 'Waiting for responses…'}
+          </p>
+        </div>
+        {hasData && (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-600">
+            ● LIVE
+          </span>
+        )}
+      </div>
+
+      {!hasData ? (
+        <div className="flex items-center justify-center h-36 text-gray-300">
+          <p className="text-xs">No responses yet</p>
+        </div>
+      ) : showOptionBreakdown ? (
+        <ResponsiveContainer width="100%" height={160}>
+          <AreaChart data={optionTrendData} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
+            <defs>
+              {options.map((o, i) => (
+                <linearGradient key={o} id={`grad15-${i}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.02} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+            <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip
+              contentStyle={{ background: '#1A1D2E', border: 'none', borderRadius: 8, fontSize: 11, color: '#fff' }}
+              labelStyle={{ color: '#94A3B8', fontSize: 10 }}
+            />
+            {options.map((o, i) => (
+              <Area key={o} type="monotone" dataKey={o}
+                stroke={COLORS[i % COLORS.length]} strokeWidth={2}
+                fill={`url(#grad15-${i})`}
+                dot={false} activeDot={{ r: 4, strokeWidth: 0 }}
+              />
+            ))}
+          </AreaChart>
+        </ResponsiveContainer>
+      ) : (
+        <ResponsiveContainer width="100%" height={160}>
+          <AreaChart data={trendData} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
+            <defs>
+              <linearGradient id="grad15-total" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#5B5CEB" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#5B5CEB" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+            <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip
+              contentStyle={{ background: '#1A1D2E', border: 'none', borderRadius: 8, fontSize: 11, color: '#fff' }}
+              labelStyle={{ color: '#94A3B8', fontSize: 10 }}
+              formatter={(v) => [v, 'Responses']}
+            />
+            <Area type="monotone" dataKey="count"
+              stroke="#5B5CEB" strokeWidth={2.5}
+              fill="url(#grad15-total)"
+              dot={{ fill: '#5B5CEB', r: 3, strokeWidth: 0 }}
+              activeDot={{ r: 5, fill: '#5B5CEB' }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
+
+      {/* Legend for multi-option view */}
+      {showOptionBreakdown && (
+        <div className="flex flex-wrap gap-3 mt-3 justify-center">
+          {options.map((o, i) => (
+            <div key={o} className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+              <span className="text-[10px] text-gray-500 font-medium">{o}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Create / Edit modal ───────────────────────────────────────────────────────
@@ -540,6 +680,13 @@ export default function VotingDayPoll() {
                 <p className="text-sm">No polls yet. Create one to get started.</p>
               </div>
             )}
+            {activePoll && (
+              <ResponseTrend15
+                responses={responses[activePoll.id] || []}
+                options={activePoll.options || []}
+              />
+            )}
+
             {polls.map(poll => {
               const isActive = poll.status === 'Active'
               const boothLabel = !poll.assignedBooths?.length
