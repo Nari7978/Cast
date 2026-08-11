@@ -12,19 +12,35 @@ import { fetchVotersForBooth } from '../../src/services/sync'
 
 // CSV column order — each entry lists all key variants (uppercase CSV + camelCase legacy)
 const CSV_FIELDS = [
-  { keys: ['SNO', 'sno', 'SNo'],                                                  label: 'S.No'            },
-  { keys: ['VOTER_ID', 'voterId', 'voter_id', 'EPIC_NO', 'epicNo', 'VOTER ID'],   label: 'Voter ID'        },
-  { keys: ['VOTER_NAME', 'voterName', 'voter_name', 'name', 'VOTER NAME'],        label: 'Voter Name'      },
-  { keys: ['FATHER_NAME', 'fatherName', 'father_name', 'FATHER NAME'],            label: "Father's Name"   },
-  { keys: ['AGE', 'age'],                                                          label: 'Age'             },
-  { keys: ['GENDER', 'gender'],                                                    label: 'Gender'          },
-  { keys: ['HOUSE_NO', 'houseNo', 'house_no', 'HOUSENO', 'HOUSE NO'],             label: 'House No'        },
-  { keys: ['POLLING_STATION', 'pollingStation', 'polling_station', 'POLLING STATION'], label: 'Polling Station' },
-  { keys: ['BOOTH_NO', 'boothNo_csv', 'BOOTH NO'],                                label: 'Booth No'        },
+  { keys: ['SNO', 'sno', 'SNo'],                                                       label: 'S.No'            },
+  { keys: ['VOTER_ID', 'voterId', 'voter_id', 'EPIC_NO', 'epicNo', 'VOTER ID'],        label: 'Voter ID'        },
+  { keys: ['VOTER_NAME', 'voterName', 'voter_name', 'name', 'VOTER NAME'],             label: 'Voter Name'      },
+  // relation fields handled separately — only the non-empty one is shown
+  { keys: ['AGE', 'age'],                                                               label: 'Age'             },
+  { keys: ['GENDER', 'gender'],                                                         label: 'Gender'          },
+  { keys: ['HOUSE_NO', 'houseNo', 'house_no', 'HOUSENO', 'HOUSE NO'],                  label: 'House No'        },
+  { keys: ['POLLING_STATION', 'pollingStation', 'polling_station', 'POLLING STATION'],  label: 'Polling Station' },
+  { keys: ['BOOTH_NO', 'boothNo_csv', 'BOOTH NO'],                                     label: 'Booth No'        },
 ]
 
+// Relation fields — only the first non-empty one is shown
+const RELATION_FIELDS = [
+  { keys: ['FATHER_NAME',         'fatherName',        'father_name',         'FATHER NAME'],         label: "Father's Name"  },
+  { keys: ['HUSBAND_NAME',        'husbandName',       'husband_name',        'HUSBAND NAME'],        label: "Husband's Name" },
+  { keys: ['MOTHER_NAME',         'motherName',        'mother_name',         'MOTHER NAME'],         label: "Mother's Name"  },
+  { keys: ['OTHER_RELATION_NAME', 'otherRelationName', 'other_relation_name', 'OTHER RELATION NAME'], label: 'Other Relation' },
+]
+
+function getRelation(voter) {
+  for (const f of RELATION_FIELDS) {
+    const value = pick(voter, ...f.keys)
+    if (value) return { label: f.label, value }
+  }
+  return null
+}
+
 // All known key variants (to avoid duplicating in extraFields)
-const KNOWN_KEYS  = new Set(CSV_FIELDS.flatMap(f => f.keys))
+const KNOWN_KEYS  = new Set([...CSV_FIELDS.flatMap(f => f.keys), ...RELATION_FIELDS.flatMap(f => f.keys)])
 const HIDDEN_KEYS = new Set(['id', 'boothNo', 'boothno', 'inserted_at', 'updatedAt'])
 
 // Pick the first matching key variant from a voter object
@@ -56,13 +72,16 @@ function VoterDetailModal({ voter, response, questions, onClose }) {
   const gColor   = GENDER_COLOR[gender] || theme.primary
   const initials = name ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() : '?'
 
-  // Build ordered field list using all key variants per field
-  const knownFields = CSV_FIELDS
-    .map(f => {
-      const value = pick(voter, ...f.keys)
-      return value ? { label: f.label, value } : null
-    })
-    .filter(Boolean)
+  // Build ordered field list — insert whichever relation has a value after Voter Name
+  const knownFields = []
+  for (const f of CSV_FIELDS) {
+    const value = pick(voter, ...f.keys)
+    if (value) knownFields.push({ label: f.label, value })
+    if (f.label === 'Voter Name') {
+      const rel = getRelation(voter)
+      if (rel) knownFields.push(rel)
+    }
+  }
 
   // Collect all keys already shown above
   const shownKeys = new Set(CSV_FIELDS.flatMap(f => f.keys))
