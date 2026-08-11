@@ -15,6 +15,27 @@ export async function clearBooths() {
   }
 }
 
+// Upsert booths from a single CSV — does NOT delete existing booths from other imports.
+export async function uploadBoothsForImport(voters, boothCol = 'BOOTH_NO', stationCol = 'POLLING_STATION') {
+  const boothMap = {}
+  voters.forEach(v => {
+    const key = String(v[boothCol] || '').trim()
+    if (!key) return
+    if (!boothMap[key]) boothMap[key] = { boothNo: key, pollingStation: v[stationCol] || '', voterCount: 0 }
+    boothMap[key].voterCount++
+  })
+  const entries = Object.values(boothMap)
+  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+    const { error } = await supabase.from('booths')
+      .upsert(entries.slice(i, i + CHUNK_SIZE), { onConflict: 'boothNo' })
+    if (error) throw error
+  }
+  // Refresh fsCache by merging in the new booths
+  const { data } = await supabase.from('booths').select('*').limit(2000)
+  if (data) writeCache('booths', data.sort((a, b) => Number(a.boothNo) - Number(b.boothNo)))
+}
+
+// Legacy: full replace (used when re-importing everything at once)
 export async function uploadBooths(voters, boothCol = 'BOOTH_NO', stationCol = 'POLLING_STATION') {
   const boothMap = {}
   voters.forEach(v => {
@@ -29,14 +50,12 @@ export async function uploadBooths(voters, boothCol = 'BOOTH_NO', stationCol = '
   const entries = Object.values(boothMap)
   const newKeys = new Set(entries.map(b => b.boothNo))
 
-  // Upsert all new booths
   for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
     const { error } = await supabase.from('booths')
       .upsert(entries.slice(i, i + CHUNK_SIZE), { onConflict: 'boothNo' })
     if (error) throw error
   }
 
-  // Delete stale booths no longer in the new CSV
   const { data: existing } = await supabase.from('booths').select('boothNo')
   const stale = (existing || []).filter(b => !newKeys.has(b.boothNo)).map(b => b.boothNo)
   for (let i = 0; i < stale.length; i += CHUNK_SIZE) {
@@ -94,8 +113,25 @@ export async function clearVoters() {
   if (error) throw error
 }
 
+// Upload voters for specific booths only (delete existing for those booths, then insert).
+export async function uploadVotersForBooths(rawVoters, boothCol = 'BOOTH_NO', boothNos) {
+  // Delete existing voters only for the booths in this import
+  for (let i = 0; i < boothNos.length; i += CHUNK_SIZE) {
+    const { error } = await supabase.from('voters').delete()
+      .in('boothNo', boothNos.slice(i, i + CHUNK_SIZE))
+    if (error) throw error
+  }
+  const rows = rawVoters
+    .map(v => normalizeVoter(v, boothCol))
+    .filter(v => v.boothNo)
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const { error } = await supabase.from('voters').insert(rows.slice(i, i + CHUNK_SIZE))
+    if (error) throw error
+  }
+}
+
+// Legacy: delete all then re-insert (used when re-importing everything at once)
 export async function uploadVoters(rawVoters, boothCol = 'BOOTH_NO') {
-  // Delete all existing voters first
   await supabase.from('voters').delete().neq('boothNo', '')
 
   const rows = rawVoters
@@ -108,8 +144,37 @@ export async function uploadVoters(rawVoters, boothCol = 'BOOTH_NO') {
   }
 }
 
+// Delete voters and booths for specific booth numbers (used on per-import delete).
+export async function deleteBoothsAndVoters(boothNos) {
+  for (let i = 0; i < boothNos.length; i += CHUNK_SIZE) {
+    await supabase.from('voters').delete().in('boothNo', boothNos.slice(i, i + CHUNK_SIZE))
+  }
+  for (let i = 0; i < boothNos.length; i += CHUNK_SIZE) {
+    await supabase.from('booths').delete().in('boothNo', boothNos.slice(i, i + CHUNK_SIZE))
+  }
+  // Refresh booths cache
+  const { data } = await supabase.from('booths').select('*').limit(2000)
+  writeCache('booths', (data || []).sort((a, b) => Number(a.boothNo) - Number(b.boothNo)))
+}
+
 // ── Import metadata ───────────────────────────────────────────────────────────
 
+// Save meta for a single import by its own ID.
+export async function saveImportMetaById(importId, meta) {
+  const { error } = await supabase.from('voter_imports').upsert({ id: importId, data: meta })
+  if (error) throw error
+}
+
+// Get all import metas ordered oldest-first.
+export async function getAllImportMetas() {
+  const { data } = await supabase
+    .from('voter_imports')
+    .select('id, data')
+    .order('inserted_at', { ascending: true })
+  return (data || []).map(r => ({ importId: r.id, ...r.data }))
+}
+
+// Legacy single-meta functions (kept for backward compat)
 export async function saveImportMeta(meta) {
   const { error } = await supabase.from('voter_imports').upsert({ id: 'latest', data: meta })
   if (error) throw error
@@ -122,5 +187,11 @@ export async function getImportMeta() {
 
 export async function deleteImportMeta() {
   const { error } = await supabase.from('voter_imports').delete().eq('id', 'latest')
+  if (error) throw error
+}
+
+// Delete a single import's meta record.
+export async function deleteImportMetaById(importId) {
+  const { error } = await supabase.from('voter_imports').delete().eq('id', importId)
   if (error) throw error
 }

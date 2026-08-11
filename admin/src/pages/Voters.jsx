@@ -3,18 +3,19 @@ import {
   Upload, Download, Search, X, FileText, CheckCircle2,
   Edit2, Trash2, Settings2, ChevronDown, ChevronLeft, ChevronRight,
   Eye, EyeOff, ArrowUp, ArrowDown, ArrowUpDown, Users, Loader2,
-  AlertCircle, Cloud,
+  AlertCircle, Cloud, Plus, FolderOpen,
 } from 'lucide-react'
 import {
-  uploadBooths, clearBooths, uploadVoters, clearVoters,
-  saveImportMeta,
-  deleteImportMeta,
+  uploadBoothsForImport, uploadVotersForBooths,
+  saveImportMetaById, deleteBoothsAndVoters, deleteImportMetaById,
+  clearBooths, clearVoters, deleteImportMeta,
 } from '../services/voterService'
 import { clearFsCache } from '../utils/fsCache'
 import {
-  cacheVoters, loadCachedVoters,
-  cacheImportMeta, loadCachedImportMeta,
-  clearVoterCache,
+  cacheImportMetas, loadCachedImportMetas,
+  loadCachedImportMeta,
+  mergeVoterCache, removeVotersByBooths,
+  loadCachedVoters, clearVoterCache,
 } from '../utils/voterCache'
 import { parseCSV, detectCols } from '../utils/csvUtils'
 
@@ -67,18 +68,19 @@ function CellContent({ col, val }) {
   return <span className="text-slate-600 whitespace-nowrap">{v}</span>
 }
 
-function CloudBanner({ status, errorMsg }) {
-  if (status === 'idle') return null
+function CloudBadge({ status, errorMsg }) {
+  if (!status || status === 'idle') return null
   const cfg = {
-    uploading: { bg: '#EEF2FF', border: '#C7D2FE', color: '#5B5CEB', icon: <Cloud size={14} className="animate-pulse" />, text: 'Saving to Supabase…' },
-    done:      { bg: '#ECFDF5', border: '#A7F3D0', color: '#10B981', icon: <CheckCircle2 size={14} />, text: 'Saved to Supabase.' },
-    error:     { bg: '#FEF2F2', border: '#FECACA', color: '#DC2626', icon: <AlertCircle size={14} />, text: errorMsg || 'Supabase save failed.' },
+    uploading: { bg: '#EEF2FF', border: '#C7D2FE', color: '#5B5CEB', icon: <Cloud size={12} className="animate-pulse" />, text: 'Syncing…' },
+    done:      { bg: '#ECFDF5', border: '#A7F3D0', color: '#10B981', icon: <CheckCircle2 size={12} />, text: 'Saved' },
+    error:     { bg: '#FEF2F2', border: '#FECACA', color: '#DC2626', icon: <AlertCircle size={12} />, text: errorMsg || 'Sync failed' },
   }[status]
+  if (!cfg) return null
   return (
-    <div className="flex items-center gap-2 px-4 py-2 rounded-xl border text-[12px] font-medium"
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold"
       style={{ background: cfg.bg, borderColor: cfg.border, color: cfg.color }}>
-      {cfg.icon}<span>{cfg.text}</span>
-    </div>
+      {cfg.icon}{cfg.text}
+    </span>
   )
 }
 
@@ -87,37 +89,56 @@ function CloudBanner({ status, errorMsg }) {
 export default function Voters() {
   const fileInputRef = useRef(null)
 
-  const [voters, setVoters]         = useState([])
-  const [csvHeaders, setCsvHeaders] = useState(DEFAULT_HEADERS)
-  const [hasFile, setHasFile]       = useState(false)
-  const [importMeta, setImportMeta] = useState(null)
+  const [voters,      setVoters]      = useState([])
+  const [csvHeaders,  setCsvHeaders]  = useState(DEFAULT_HEADERS)
+  const [importMetas, setImportMetas] = useState([])   // [{importId, name, importedOn, records, booths, stations, boothNos, boothCol, stationCol, csvHeaders}]
 
   // 'idle' | 'loading' | 'ready' | 'error'
-  const [loadStatus,   setLoadStatus]   = useState('idle')
-  // 'idle' | 'uploading' | 'done' | 'error'
-  const [cloudStatus,  setCloudStatus]  = useState('idle')
-  const [cloudError,   setCloudError]   = useState('')
+  const [loadStatus, setLoadStatus] = useState('idle')
 
-  const [visibleCols, setVisibleCols] = useState(() => new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
+  // Per-import cloud sync status: { [importId]: 'uploading'|'done'|'error'|'idle' }
+  const [cloudStatus, setCloudStatus] = useState({})
+  const [cloudError,  setCloudError]  = useState({})
+
+  const [visibleCols,  setVisibleCols]  = useState(() => new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
   const [showColPanel, setShowColPanel] = useState(false)
 
-  const [search, setSearch]               = useState('')
-  const [filterStation, setFilterStation] = useState('')
-  const [filterBooth, setFilterBooth]     = useState('')
-  const [sort, setSort]                   = useState({ col: '', dir: 'asc' })
-  const [page, setPage]                   = useState(1)
-  const [drawerVoter, setDrawerVoter]     = useState(null)
-  const [showConfirmClear, setShowConfirmClear] = useState(false)
+  const [search,         setSearch]         = useState('')
+  const [filterStation,  setFilterStation]  = useState('')
+  const [filterBooth,    setFilterBooth]    = useState('')
+  const [sort,           setSort]           = useState({ col: '', dir: 'asc' })
+  const [page,           setPage]           = useState(1)
+  const [drawerVoter,    setDrawerVoter]    = useState(null)
+  const [confirmDelete,  setConfirmDelete]  = useState(null)   // importId to confirm-delete, or 'all'
 
-  // ── On mount: restore from IndexedDB only (no network fetch on load) ────
+  const hasImports = importMetas.length > 0
+
+  // ── On mount: restore from local cache ──────────────────────────────────────
   useEffect(() => {
-    const cachedMeta = loadCachedImportMeta()
-    if (!cachedMeta?.records || !cachedMeta?.csvHeaders) return
+    // Try multi-import metas first
+    let metas = loadCachedImportMetas()
 
-    setImportMeta(cachedMeta)
-    setCsvHeaders(cachedMeta.csvHeaders)
-    setVisibleCols(new Set(cachedMeta.csvHeaders.filter(h => h !== 'ADDRESS')))
-    setHasFile(true)
+    // Migrate old single-meta format
+    if (!metas.length) {
+      const old = loadCachedImportMeta()
+      if (old?.records) {
+        metas = [{
+          importId: 'import_legacy',
+          ...old,
+          boothNos: [],  // unknown — can't delete by booth without this
+        }]
+        cacheImportMetas(metas)
+      }
+    }
+
+    if (!metas.length) return
+
+    setImportMetas(metas)
+    const lastHeaders = metas[metas.length - 1]?.csvHeaders
+    if (lastHeaders) {
+      setCsvHeaders(lastHeaders)
+      setVisibleCols(new Set(lastHeaders.filter(h => h !== 'ADDRESS')))
+    }
     setLoadStatus('loading')
 
     loadCachedVoters().then(cached => {
@@ -125,91 +146,163 @@ export default function Voters() {
         setVoters(cached)
         setLoadStatus('ready')
       } else {
-        // IndexedDB empty — re-upload required
         setLoadStatus('idle')
-        setHasFile(false)
       }
-    }).catch(() => { setLoadStatus('idle'); setHasFile(false) })
+    }).catch(() => setLoadStatus('idle'))
   }, [])
 
-  // ── CSV file upload handler ────
+  // ── CSV file upload handler (append mode) ────────────────────────────────────
   const handleFileChange = useCallback(async e => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
+
+    const importId = 'import_' + Date.now()
 
     // 1. Parse CSV
     const text = await file.text()
     const { headers, voters: parsed } = parseCSV(text)
     const { boothCol, stationCol } = detectCols(headers, parsed.slice(0, 50))
 
-    // 2. Show table immediately
-    setVoters(parsed)
-    setCsvHeaders(headers)
-    setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
-    setHasFile(true)
-    setLoadStatus('ready')
-    setCloudStatus('idle')
-    setCloudError('')
-    setPage(1)
-    setSearch(''); setFilterStation(''); setFilterBooth('')
-
-    const boothSet   = new Set(parsed.map(v => v[boothCol]).filter(Boolean))
+    const boothNos   = [...new Set(parsed.map(v => String(v[boothCol] || '').trim()).filter(Boolean))]
     const stationSet = new Set(parsed.map(v => v[stationCol]).filter(Boolean))
+    const boothSet   = new Set(boothNos)
+
+    // Give each voter a stable unique _id and a _boothNo tag for cache merging
+    const parsedTagged = parsed.map((v, i) => ({
+      ...v,
+      _id:     `${importId}_${i + 1}`,
+      _boothNo: String(v[boothCol] || '').trim(),
+    }))
+
+    // 2. Build new meta for this import
     const now = new Date()
     const meta = {
-      name: file.name,
+      importId,
+      name:       file.name,
       importedOn: now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-      records: parsed.length,
-      booths: boothSet.size,
-      stations: stationSet.size,
+      records:    parsed.length,
+      booths:     boothNos.length,
+      stations:   stationSet.size,
       boothCol,
       stationCol,
       csvHeaders: headers,
+      boothNos,
     }
-    setImportMeta(meta)
 
-    // 3. Save to IndexedDB immediately — persistent, no network, fast
-    cacheImportMeta(meta)
-    cacheVoters(parsed) // ~0.5s for 30K rows, runs without blocking UI
+    // 3. If any existing import owned those booths, strip those booths from it.
+    //    An import with no remaining booths is removed entirely.
+    const updatedMetas = importMetas
+      .map(m => ({
+        ...m,
+        boothNos: (m.boothNos || []).filter(bn => !boothSet.has(String(bn))),
+      }))
+      .filter(m => m.boothNos.length > 0 || m.importId === 'import_legacy')
 
-    // 4. Cloud backup — must reach Firebase server
-    setCloudStatus('uploading')
-    setCloudError('')
+    const newMetas = [...updatedMetas, meta]
+
+    // 4. Show data immediately
+    const existingVoters = voters.filter(v => !boothSet.has(String(v._boothNo || '')))
+    const allVoters      = [...existingVoters, ...parsedTagged]
+
+    setVoters(allVoters)
+    setCsvHeaders(headers)
+    setVisibleCols(new Set(headers.filter(h => h !== 'ADDRESS')))
+    setImportMetas(newMetas)
+    setLoadStatus('ready')
+    setPage(1)
+    setSearch(''); setFilterStation(''); setFilterBooth('')
+
+    // 5. Persist locally
+    cacheImportMetas(newMetas)
+    mergeVoterCache(parsedTagged, boothNos).catch(() => {})
+
+    // 6. Cloud backup
+    setCloudStatus(s => ({ ...s, [importId]: 'uploading' }))
+    setCloudError(e => ({ ...e, [importId]: '' }))
     Promise.all([
-      uploadBooths(parsed, boothCol, stationCol),
-      uploadVoters(parsed, boothCol),
-      saveImportMeta(meta),
+      uploadBoothsForImport(parsed, boothCol, stationCol),
+      uploadVotersForBooths(parsed, boothCol, boothNos),
+      saveImportMetaById(importId, meta),
     ]).then(() => {
-      setCloudStatus('done')
-      setTimeout(() => setCloudStatus('idle'), 3000)
+      setCloudStatus(s => ({ ...s, [importId]: 'done' }))
+      setTimeout(() => setCloudStatus(s => ({ ...s, [importId]: 'idle' })), 3000)
     }).catch(err => {
       const msg = err?.code === 'permission-denied'
-        ? 'Supabase permission denied — check Row Level Security policies in your Supabase dashboard.'
-        : `Upload error: ${err?.message || err}`
-      setCloudError(msg)
-      setCloudStatus('error')
-      console.error('[Voters] Upload failed:', err)
+        ? 'Supabase permission denied — check RLS policies.'
+        : `Sync error: ${err?.message || err}`
+      setCloudError(e => ({ ...e, [importId]: msg }))
+      setCloudStatus(s => ({ ...s, [importId]: 'error' }))
     })
+  }, [voters, importMetas])
+
+  // ── Delete one import ────────────────────────────────────────────────────────
+  const handleDeleteImport = useCallback(async importId => {
+    const meta = importMetas.find(m => m.importId === importId)
+    if (!meta) return
+
+    const boothNos = meta.boothNos || []
+    const boothSet = new Set(boothNos.map(String))
+
+    const newMetas   = importMetas.filter(m => m.importId !== importId)
+    const newVoters  = voters.filter(v => !boothSet.has(String(v._boothNo || '')))
+    const newHeaders = newMetas.length > 0
+      ? (newMetas[newMetas.length - 1]?.csvHeaders || DEFAULT_HEADERS)
+      : DEFAULT_HEADERS
+
+    setImportMetas(newMetas)
+    setVoters(newVoters)
+    setCsvHeaders(newHeaders)
+    setVisibleCols(new Set(newHeaders.filter(h => h !== 'ADDRESS')))
+    if (newMetas.length === 0) setLoadStatus('idle')
+    setConfirmDelete(null)
+
+    cacheImportMetas(newMetas)
+    removeVotersByBooths(boothNos).catch(() => {})
+    if (boothNos.length) {
+      deleteBoothsAndVoters(boothNos).catch(() => {})
+    }
+    deleteImportMetaById(importId).catch(() => {})
+    if (importId === 'import_legacy') deleteImportMeta().catch(() => {})
+  }, [importMetas, voters])
+
+  // ── Delete all ───────────────────────────────────────────────────────────────
+  const handleClearAll = useCallback(() => {
+    setVoters([])
+    setCsvHeaders(DEFAULT_HEADERS)
+    setVisibleCols(new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
+    setImportMetas([])
+    setLoadStatus('idle')
+    setCloudStatus({})
+    setSearch(''); setFilterStation(''); setFilterBooth('')
+    setPage(1)
+    setConfirmDelete(null)
+
+    clearFsCache('booths')
+    clearVoterCache().catch(() => {})
+    clearBooths().catch(() => {})
+    clearVoters().catch(() => {})
+    deleteImportMeta().catch(() => {})
   }, [])
 
-  // ── Detected column names from meta ────
+  // ── Column detection from merged headers ─────────────────────────────────────
   const { boothCol, stationCol } = useMemo(() => {
-    if (importMeta?.boothCol) return { boothCol: importMeta.boothCol, stationCol: importMeta.stationCol }
+    const lastMeta = importMetas[importMetas.length - 1]
+    if (lastMeta?.boothCol) return { boothCol: lastMeta.boothCol, stationCol: lastMeta.stationCol }
     return detectCols(csvHeaders, voters.slice(0, 50))
-  }, [importMeta, csvHeaders, voters])
+  }, [importMetas, csvHeaders, voters])
 
-  // ── Derived filter options (from in-memory voters) ────
+  // ── Derived filter options ────────────────────────────────────────────────────
   const allStations = useMemo(() =>
     [...new Set(voters.map(v => v[stationCol]))].filter(Boolean).sort()
   , [voters, stationCol])
 
   const allBooths = useMemo(() => {
     const base = filterStation ? voters.filter(v => v[stationCol] === filterStation) : voters
-    return [...new Set(base.map(v => v[boothCol]))].filter(Boolean).sort((a, b) => Number(a) - Number(b))
+    return [...new Set(base.map(v => v[boothCol] || v._boothNo))].filter(Boolean).sort((a, b) => Number(a) - Number(b))
   }, [voters, filterStation, boothCol, stationCol])
 
-  // ── Filtered + sorted + paged ────
+  // ── Filtered + sorted + paged ─────────────────────────────────────────────────
   const filtered = useMemo(() => {
     let data = voters
     if (search) {
@@ -217,7 +310,7 @@ export default function Voters() {
       data = data.filter(v => csvHeaders.some(h => String(v[h] ?? '').toLowerCase().includes(q)))
     }
     if (filterStation) data = data.filter(v => v[stationCol] === filterStation)
-    if (filterBooth)   data = data.filter(v => v[boothCol]   === filterBooth)
+    if (filterBooth)   data = data.filter(v => (v[boothCol] || v._boothNo) === filterBooth)
     if (sort.col) {
       data = [...data].sort((a, b) => {
         const av = String(a[sort.col] ?? ''), bv = String(b[sort.col] ?? '')
@@ -242,39 +335,18 @@ export default function Voters() {
     return [page - 2, page - 1, page, page + 1, page + 2]
   }, [page, totalPages])
 
-  const handleClearAll = () => {
-    setVoters([])
-    setCsvHeaders(DEFAULT_HEADERS)
-    setVisibleCols(new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
-    setHasFile(false)
-    setImportMeta(null)
-    setLoadStatus('idle')
-    setCloudStatus('idle')
-    setSearch(''); setFilterStation(''); setFilterBooth('')
-    setPage(1)
-    setShowConfirmClear(false)
-
-    // Clear all caches immediately so other pages see no stale data
-    clearFsCache('booths')
-
-    // Async cleanup — clear local storage, Firestore booths, and voter import meta
-    clearVoterCache().catch(() => {})
-    clearBooths().catch(() => {})
-    clearVoters().catch(() => {})
-    deleteImportMeta().catch(() => {})
-  }
-
   const handleSort = col => {
     setSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' })
     setPage(1)
   }
-  const toggleCol = col => setVisibleCols(prev => {
-    const next = new Set(prev)
-    if (next.has(col)) { if (next.size > 1) next.delete(col) } else next.add(col)
-    return next
-  })
+  const toggleCol    = col => setVisibleCols(prev => { const n = new Set(prev); n.has(col) ? (n.size > 1 && n.delete(col)) : n.add(col); return n })
   const clearFilters = () => { setSearch(''); setFilterStation(''); setFilterBooth(''); setPage(1) }
   const hasActiveFilters = search || filterStation || filterBooth
+
+  // Aggregate totals across all imports
+  const totalVoters   = voters.length
+  const totalBooths   = importMetas.reduce((s, m) => s + (m.boothNos?.length || m.booths || 0), 0)
+  const totalStations = useMemo(() => new Set(voters.map(v => v[stationCol]).filter(Boolean)).size, [voters, stationCol])
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -286,10 +358,10 @@ export default function Voters() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-slate-800 font-bold text-xl">Voter Import</h1>
-            <p className="text-slate-400 text-[13px] mt-0.5">Upload, view and manage official voter lists.</p>
+            <p className="text-slate-400 text-[13px] mt-0.5">Upload booth CSVs — each file adds its booths without overwriting others.</p>
           </div>
           <div className="flex items-center gap-2">
-            {hasFile && (
+            {hasImports && (
               <>
                 <button className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[#E8ECF4] bg-white text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">
                   <Download size={14} /> Export CSV
@@ -298,12 +370,16 @@ export default function Voters() {
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-[13px] font-medium transition-colors ${showColPanel ? 'border-[#5B5CEB] text-[#5B5CEB] bg-[#EEF2FF]' : 'border-[#E8ECF4] bg-white text-slate-600 hover:bg-slate-50'}`}>
                   <Settings2 size={14} /> Columns
                 </button>
+                <button onClick={() => setConfirmDelete('all')}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-red-100 text-red-400 text-[13px] font-medium hover:bg-red-50 transition-colors">
+                  <Trash2 size={14} /> Clear All
+                </button>
               </>
             )}
             <button onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
               style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)', boxShadow: '0 2px 8px rgba(91,92,235,0.3)' }}>
-              <Upload size={14} /> {hasFile ? 'Re-import CSV' : 'Import CSV'}
+              {hasImports ? <><Plus size={14} /> Add CSV</> : <><Upload size={14} /> Import CSV</>}
             </button>
           </div>
         </div>
@@ -311,7 +387,7 @@ export default function Voters() {
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
-        {/* Loading from IndexedDB */}
+        {/* Loading */}
         {loadStatus === 'loading' && (
           <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
             <div className="text-center">
@@ -322,96 +398,103 @@ export default function Voters() {
           </div>
         )}
 
-        {/* Download error */}
-        {loadStatus === 'error' && (
-          <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
-            <div className="bg-white rounded-2xl border border-red-100 p-10 text-center max-w-sm">
-              <AlertCircle size={32} className="mx-auto mb-3" style={{ color: '#EF4444' }} />
-              <p className="text-slate-800 font-bold text-[15px] mb-1">Could not restore voter list</p>
-              <p className="text-slate-400 text-[13px] mb-5">Please re-upload the CSV file.</p>
-              <button onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-semibold"
-                style={{ background: '#5B5CEB' }}>
-                <Upload size={14} /> Upload CSV File
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Empty state */}
-        {loadStatus === 'idle' && !hasFile && (
+        {loadStatus === 'idle' && !hasImports && (
           <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
             <div className="bg-white rounded-2xl border-2 border-dashed border-[#C7D2FE] p-14 text-center max-w-md w-full" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
               <div className="w-18 h-18 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ width: 72, height: 72, background: '#EEF2FF' }}>
-                <Users size={30} style={{ color: '#5B5CEB' }} />
+                <FolderOpen size={30} style={{ color: '#5B5CEB' }} />
               </div>
-              {importMeta ? (
-                <>
-                  <h3 className="text-slate-800 font-bold text-[18px] mb-1">Previous import found</h3>
-                  <p className="text-slate-500 text-[13px] mb-1">{importMeta.name}</p>
-                  <p className="text-slate-400 text-[12px] mb-6">{importMeta.records?.toLocaleString()} voters · Re-upload to restore.</p>
-                </>
-              ) : (
-                <>
-                  <h3 className="text-slate-800 font-bold text-[18px] mb-2">No voter list uploaded</h3>
-                  <p className="text-slate-400 text-[13px] leading-relaxed mb-7">
-                    Upload an official voter CSV to begin managing voter records.
-                  </p>
-                </>
-              )}
+              <h3 className="text-slate-800 font-bold text-[18px] mb-2">No voter lists uploaded</h3>
+              <p className="text-slate-400 text-[13px] leading-relaxed mb-2">
+                Upload one CSV per booth — each upload adds that booth's voters without overwriting others.
+              </p>
+              <p className="text-slate-300 text-[12px] mb-7">e.g. booth1.csv → booth2.csv → booth3.csv</p>
               <button onClick={() => fileInputRef.current?.click()}
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white text-[14px] font-semibold hover:opacity-90 transition-opacity"
                 style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)', boxShadow: '0 2px 8px rgba(91,92,235,0.3)' }}>
-                <Upload size={16} /> Upload CSV File
+                <Upload size={16} /> Upload First Booth CSV
               </button>
             </div>
           </div>
         )}
 
         {/* Main content */}
-        {loadStatus === 'ready' && hasFile && (
+        {(loadStatus === 'ready' || hasImports) && loadStatus !== 'loading' && (
           <>
-            {/* File card */}
-            <div className="bg-white rounded-2xl border border-[#E8ECF4] px-5 py-4 flex items-center gap-5" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#EEF2FF' }}>
-                <FileText size={18} style={{ color: '#5B5CEB' }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-slate-800 font-semibold text-[14px] truncate">{importMeta?.name || 'Imported File'}</p>
-                <p className="text-slate-400 text-[12px] mt-0.5">Imported on {importMeta?.importedOn}</p>
-              </div>
-              <div className="flex items-center gap-8 text-center">
+            {/* ── Aggregate summary ── */}
+            {hasImports && (
+              <div className="bg-white rounded-2xl border border-[#E8ECF4] px-5 py-4 flex items-center gap-8" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#EEF2FF' }}>
+                    <Users size={18} style={{ color: '#5B5CEB' }} />
+                  </div>
+                  <div>
+                    <p className="text-slate-800 font-bold text-[15px]">All Booths Combined</p>
+                    <p className="text-slate-400 text-[12px] mt-0.5">{importMetas.length} file{importMetas.length !== 1 ? 's' : ''} imported</p>
+                  </div>
+                </div>
                 {[
-                  ['Records', voters.length.toLocaleString()],
-                  ['Booths', (importMeta?.booths ?? allBooths.length).toString()],
-                  ['Polling Stations', (importMeta?.stations ?? allStations.length).toString()],
+                  ['Total Voters', totalVoters.toLocaleString()],
+                  ['Total Booths', totalBooths.toString()],
+                  ['Polling Stations', totalStations.toString()],
                 ].map(([label, val]) => (
-                  <div key={label}>
-                    <p className="text-slate-800 font-bold text-[17px]">{val}</p>
+                  <div key={label} className="text-center flex-shrink-0">
+                    <p className="text-slate-800 font-bold text-[20px]">{val}</p>
                     <p className="text-slate-400 text-[11px] mt-0.5">{label}</p>
                   </div>
                 ))}
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: '#ECFDF5' }}>
-                  <CheckCircle2 size={13} style={{ color: '#10B981' }} />
-                  <span className="text-[12px] font-semibold" style={{ color: '#10B981' }}>Ready</span>
-                </div>
-                <button
-                  onClick={() => setShowConfirmClear(true)}
-                  title="Delete all voter data"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-red-100 text-red-400 text-[12px] font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-                >
-                  <Trash2 size={13} /> Delete
+                <button onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 flex-shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)' }}>
+                  <Plus size={14} /> Add Another Booth CSV
                 </button>
               </div>
-            </div>
+            )}
 
-            {/* Cloud backup status */}
-            <CloudBanner status={cloudStatus} errorMsg={cloudError} />
+            {/* ── Per-import file cards ── */}
+            {importMetas.map(meta => (
+              <div key={meta.importId}
+                className="bg-white rounded-2xl border border-[#E8ECF4] px-5 py-4 flex items-center gap-5"
+                style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#F1F5F9' }}>
+                  <FileText size={16} style={{ color: '#64748B' }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-slate-700 font-semibold text-[13px] truncate">{meta.name || 'Imported File'}</p>
+                    <CloudBadge status={cloudStatus[meta.importId]} errorMsg={cloudError[meta.importId]} />
+                  </div>
+                  <p className="text-slate-400 text-[11px] mt-0.5">Imported on {meta.importedOn}</p>
+                </div>
+                <div className="flex items-center gap-6 text-center flex-shrink-0">
+                  {[
+                    ['Voters',  (meta.records || 0).toLocaleString()],
+                    ['Booths',  (meta.boothNos?.length || meta.booths || 0).toString()],
+                    ['Stations', (meta.stations || 0).toString()],
+                  ].map(([label, val]) => (
+                    <div key={label}>
+                      <p className="text-slate-800 font-bold text-[15px]">{val}</p>
+                      <p className="text-slate-400 text-[10px] mt-0.5">{label}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: '#ECFDF5' }}>
+                    <CheckCircle2 size={12} style={{ color: '#10B981' }} />
+                    <span className="text-[11px] font-semibold" style={{ color: '#10B981' }}>Ready</span>
+                  </div>
+                  <button
+                    onClick={() => setConfirmDelete(meta.importId)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-red-100 text-red-400 text-[11px] font-semibold hover:bg-red-50 hover:text-red-500 transition-colors">
+                    <Trash2 size={11} /> Delete
+                  </button>
+                </div>
+              </div>
+            ))}
 
             {/* Column panel */}
-            {showColPanel && (
+            {showColPanel && hasImports && (
               <div className="bg-white rounded-2xl border border-[#E8ECF4] p-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-slate-700 font-semibold text-[13px]">Column Visibility</p>
@@ -436,154 +519,174 @@ export default function Voters() {
             )}
 
             {/* Search + Filters */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative" style={{ minWidth: 260 }}>
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
-                  placeholder="Search by any field…"
-                  className="w-full pl-9 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-700 placeholder-slate-400 outline-none"
-                  onFocus={e => e.target.style.borderColor = '#5B5CEB'}
-                  onBlur={e => e.target.style.borderColor = '#E8ECF4'} />
-                {search && (
-                  <button onClick={() => { setSearch(''); setPage(1) }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                    <X size={13} />
+            {hasImports && (
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative" style={{ minWidth: 260 }}>
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
+                    placeholder="Search by any field…"
+                    className="w-full pl-9 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-700 placeholder-slate-400 outline-none"
+                    onFocus={e => e.target.style.borderColor = '#5B5CEB'}
+                    onBlur={e => e.target.style.borderColor = '#E8ECF4'} />
+                  {search && (
+                    <button onClick={() => { setSearch(''); setPage(1) }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <select value={filterStation} onChange={e => { setFilterStation(e.target.value); setFilterBooth(''); setPage(1) }}
+                    className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-600 outline-none cursor-pointer" style={{ minWidth: 160 }}>
+                    <option value="">Polling Station</option>
+                    {allStations.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+
+                <div className="relative">
+                  <select value={filterBooth} onChange={e => { setFilterBooth(e.target.value); setPage(1) }}
+                    className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-600 outline-none cursor-pointer" style={{ minWidth: 140 }}>
+                    <option value="">Booth Number</option>
+                    {allBooths.map(b => <option key={b} value={b}>{/^\d+$/.test(b) ? `Booth ${b}` : b}</option>)}
+                  </select>
+                  <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+
+                {hasActiveFilters && (
+                  <button onClick={clearFilters} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] text-slate-500 border border-[#E8ECF4] bg-white hover:bg-slate-50 transition-colors">
+                    <X size={12} /> Clear filters
                   </button>
                 )}
+                <span className="ml-auto text-slate-400 text-[12px] flex-shrink-0">
+                  {filtered.length.toLocaleString()} record{filtered.length !== 1 ? 's' : ''}
+                </span>
               </div>
-
-              <div className="relative">
-                <select value={filterStation} onChange={e => { setFilterStation(e.target.value); setFilterBooth(''); setPage(1) }}
-                  className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-600 outline-none cursor-pointer" style={{ minWidth: 160 }}>
-                  <option value="">Polling Station</option>
-                  {allStations.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-
-              <div className="relative">
-                <select value={filterBooth} onChange={e => { setFilterBooth(e.target.value); setPage(1) }}
-                  className="appearance-none pl-3 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-600 outline-none cursor-pointer" style={{ minWidth: 140 }}>
-                  <option value="">Booth Number</option>
-                  {allBooths.map(b => <option key={b} value={b}>{/^\d+$/.test(b) ? `Booth ${b}` : b}</option>)}
-                </select>
-                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-
-              {hasActiveFilters && (
-                <button onClick={clearFilters} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] text-slate-500 border border-[#E8ECF4] bg-white hover:bg-slate-50 transition-colors">
-                  <X size={12} /> Clear filters
-                </button>
-              )}
-              <span className="ml-auto text-slate-400 text-[12px] flex-shrink-0">
-                {filtered.length.toLocaleString()} record{filtered.length !== 1 ? 's' : ''}
-              </span>
-            </div>
+            )}
 
             {/* Table */}
-            <div className="bg-white rounded-2xl border border-[#E8ECF4] overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-              <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 400px)', overflowY: 'auto' }}>
-                <table className="border-collapse" style={{ minWidth: `${(displayCols.length + 1) * 130}px`, width: '100%' }}>
-                  <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
-                    <tr className="border-b border-[#E8ECF4]" style={{ background: '#F8FAFC' }}>
-                      {displayCols.map((col, ci) => (
-                        <th key={col} onClick={() => handleSort(col)}
-                          className="text-left px-4 py-3 text-slate-500 font-semibold text-[11px] uppercase tracking-wider cursor-pointer select-none whitespace-nowrap"
-                          style={ci === 0 ? { position: 'sticky', left: 0, zIndex: 31, background: '#F8FAFC' } : { background: '#F8FAFC' }}>
-                          <div className="flex items-center gap-1.5 hover:text-slate-700 transition-colors">
-                            {hl(col)}<SortIcon col={col} sort={sort} />
-                          </div>
-                        </th>
-                      ))}
-                      <th className="px-4 py-3 text-slate-400 font-semibold text-[11px] uppercase tracking-wider text-right"
-                        style={{ background: '#F8FAFC', minWidth: 96 }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pageData.length === 0 ? (
-                      <tr><td colSpan={displayCols.length + 1} className="text-center py-16 text-slate-400 text-[13px]">No voters match your search or filters.</td></tr>
-                    ) : pageData.map((voter) => (
-                      <tr key={voter._id} onClick={() => setDrawerVoter(voter)}
-                        className="border-b border-slate-50 cursor-pointer"
-                        onMouseEnter={e => e.currentTarget.style.background = '#F8FAFD'}
-                        onMouseLeave={e => e.currentTarget.style.background = ''}>
+            {hasImports && loadStatus === 'ready' && (
+              <div className="bg-white rounded-2xl border border-[#E8ECF4] overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 440px)', overflowY: 'auto' }}>
+                  <table className="border-collapse" style={{ minWidth: `${(displayCols.length + 1) * 130}px`, width: '100%' }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
+                      <tr className="border-b border-[#E8ECF4]" style={{ background: '#F8FAFC' }}>
                         {displayCols.map((col, ci) => (
-                          <td key={col} className="px-4 py-3"
-                            style={ci === 0 ? { position: 'sticky', left: 0, zIndex: 10, background: 'inherit' } : {}}>
-                            <CellContent col={col} val={voter[col]} />
-                          </td>
+                          <th key={col} onClick={() => handleSort(col)}
+                            className="text-left px-4 py-3 text-slate-500 font-semibold text-[11px] uppercase tracking-wider cursor-pointer select-none whitespace-nowrap"
+                            style={ci === 0 ? { position: 'sticky', left: 0, zIndex: 31, background: '#F8FAFC' } : { background: '#F8FAFC' }}>
+                            <div className="flex items-center gap-1.5 hover:text-slate-700 transition-colors">
+                              {hl(col)}<SortIcon col={col} sort={sort} />
+                            </div>
+                          </th>
                         ))}
-                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center gap-1 justify-end">
-                            <button onClick={() => setDrawerVoter(voter)} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors"><Eye size={14} /></button>
-                            <button className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><Edit2 size={14} /></button>
-                            <button className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
-                          </div>
-                        </td>
+                        <th className="px-4 py-3 text-slate-400 font-semibold text-[11px] uppercase tracking-wider text-right"
+                          style={{ background: '#F8FAFC', minWidth: 96 }}>Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {pageData.length === 0 ? (
+                        <tr><td colSpan={displayCols.length + 1} className="text-center py-16 text-slate-400 text-[13px]">No voters match your search or filters.</td></tr>
+                      ) : pageData.map(voter => (
+                        <tr key={voter._id} onClick={() => setDrawerVoter(voter)}
+                          className="border-b border-slate-50 cursor-pointer"
+                          onMouseEnter={e => e.currentTarget.style.background = '#F8FAFD'}
+                          onMouseLeave={e => e.currentTarget.style.background = ''}>
+                          {displayCols.map((col, ci) => (
+                            <td key={col} className="px-4 py-3"
+                              style={ci === 0 ? { position: 'sticky', left: 0, zIndex: 10, background: 'inherit' } : {}}>
+                              <CellContent col={col} val={voter[col]} />
+                            </td>
+                          ))}
+                          <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-1 justify-end">
+                              <button onClick={() => setDrawerVoter(voter)} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors"><Eye size={14} /></button>
+                              <button className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><Edit2 size={14} /></button>
+                              <button className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* Pagination */}
-              <div className="flex items-center justify-between px-5 py-3 border-t border-[#E8ECF4]">
-                <span className="text-slate-400 text-[12px]">
-                  Showing {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()} of {filtered.length.toLocaleString()} records
-                </span>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setPage(1)} disabled={page === 1}
-                    className="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">«</button>
-                  <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                    className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={14} /></button>
-                  {pageWindow.map(p => (
-                    <button key={p} onClick={() => setPage(p)}
-                      className="w-8 h-8 rounded-lg text-[12px] font-medium transition-colors"
-                      style={page === p ? { background: '#5B5CEB', color: '#fff' } : { color: '#64748B' }}
-                      onMouseEnter={e => { if (page !== p) e.currentTarget.style.background = '#F1F5F9' }}
-                      onMouseLeave={e => { if (page !== p) e.currentTarget.style.background = '' }}>
-                      {p}
-                    </button>
-                  ))}
-                  <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                    className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronRight size={14} /></button>
-                  <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
-                    className="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">»</button>
+                {/* Pagination */}
+                <div className="flex items-center justify-between px-5 py-3 border-t border-[#E8ECF4]">
+                  <span className="text-slate-400 text-[12px]">
+                    Showing {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()} of {filtered.length.toLocaleString()} records
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setPage(1)} disabled={page === 1}
+                      className="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">«</button>
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                      className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={14} /></button>
+                    {pageWindow.map(p => (
+                      <button key={p} onClick={() => setPage(p)}
+                        className="w-8 h-8 rounded-lg text-[12px] font-medium transition-colors"
+                        style={page === p ? { background: '#5B5CEB', color: '#fff' } : { color: '#64748B' }}
+                        onMouseEnter={e => { if (page !== p) e.currentTarget.style.background = '#F1F5F9' }}
+                        onMouseLeave={e => { if (page !== p) e.currentTarget.style.background = '' }}>
+                        {p}
+                      </button>
+                    ))}
+                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                      className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronRight size={14} /></button>
+                    <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
+                      className="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">»</button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>
 
-      {/* ── Confirm Clear Modal ── */}
-      {showConfirmClear && (
+      {/* ── Confirm Delete Modal ── */}
+      {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }}>
           <div className="bg-white rounded-2xl border border-[#E8ECF4] p-7 flex flex-col items-center text-center" style={{ width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: '#FEF2F2' }}>
               <Trash2 size={24} style={{ color: '#EF4444' }} />
             </div>
-            <p className="text-slate-800 font-bold text-[17px] mb-1">Delete all voter data?</p>
-            <p className="text-slate-500 text-[13px] leading-relaxed mb-1">
-              This will permanently remove <strong>{voters.length.toLocaleString()} voters</strong> and the cloud backup. Booth data will be preserved.
-            </p>
-            <p className="text-slate-400 text-[12px] mb-6">You will need to re-import a CSV to restore the data.</p>
+            {confirmDelete === 'all' ? (
+              <>
+                <p className="text-slate-800 font-bold text-[17px] mb-1">Delete all voter data?</p>
+                <p className="text-slate-500 text-[13px] leading-relaxed mb-1">
+                  This will remove all <strong>{totalVoters.toLocaleString()} voters</strong> from all {importMetas.length} imported files.
+                </p>
+                <p className="text-slate-400 text-[12px] mb-6">You will need to re-import all booth CSVs to restore.</p>
+              </>
+            ) : (() => {
+              const meta = importMetas.find(m => m.importId === confirmDelete)
+              return (
+                <>
+                  <p className="text-slate-800 font-bold text-[17px] mb-1">Delete this booth import?</p>
+                  <p className="text-slate-500 text-[13px] leading-relaxed mb-1">
+                    <strong>{meta?.name}</strong><br />
+                    {(meta?.records || 0).toLocaleString()} voters · {meta?.boothNos?.length || meta?.booths || 0} booth{(meta?.boothNos?.length || meta?.booths) !== 1 ? 's' : ''}
+                  </p>
+                  <p className="text-slate-400 text-[12px] mb-6">Only this file's booths will be removed. Other imports stay intact.</p>
+                </>
+              )
+            })()}
             <div className="flex gap-3 w-full">
-              <button onClick={() => setShowConfirmClear(false)}
+              <button onClick={() => setConfirmDelete(null)}
                 className="flex-1 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-semibold hover:bg-slate-50 transition-colors">
                 Cancel
               </button>
-              <button onClick={handleClearAll}
+              <button
+                onClick={() => confirmDelete === 'all' ? handleClearAll() : handleDeleteImport(confirmDelete)}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
                 style={{ background: 'linear-gradient(135deg,#EF4444,#F87171)' }}>
-                <Trash2 size={14} />
-                Yes, delete all
+                <Trash2 size={14} /> Yes, delete
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Voter Drawer */}
+      {/* ── Voter Drawer ── */}
       {drawerVoter && (
         <>
           <div className="fixed inset-0 bg-black/20 z-40" style={{ backdropFilter: 'blur(1px)' }} onClick={() => setDrawerVoter(null)} />

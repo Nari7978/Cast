@@ -15,8 +15,29 @@ function openDB() {
   })
 }
 
-// Save all voters to IndexedDB (clears old data first).
-// Runs in a single transaction — fast even for 50K records.
+// ── Single-import cache (legacy compat) ───────────────────────────────────────
+
+const META_KEY = 'cast_import_meta'
+export function cacheImportMeta(meta) {
+  try { localStorage.setItem(META_KEY, JSON.stringify(meta)) } catch {}
+}
+export function loadCachedImportMeta() {
+  try { return JSON.parse(localStorage.getItem(META_KEY)) } catch { return null }
+}
+
+// ── Multi-import metadata ─────────────────────────────────────────────────────
+
+const METAS_KEY = 'cast_import_metas'
+export function cacheImportMetas(metas) {
+  try { localStorage.setItem(METAS_KEY, JSON.stringify(metas)) } catch {}
+}
+export function loadCachedImportMetas() {
+  try { return JSON.parse(localStorage.getItem(METAS_KEY)) || [] } catch { return [] }
+}
+
+// ── Voter IndexedDB ───────────────────────────────────────────────────────────
+
+// Full replace (used by first import or clear+reimport).
 export async function cacheVoters(voters) {
   const db = await openDB()
   return new Promise((resolve, reject) => {
@@ -24,6 +45,44 @@ export async function cacheVoters(voters) {
     const store = tx.objectStore(VOTER_STORE)
     store.clear()
     for (const v of voters) store.put(v)
+    tx.oncomplete = () => resolve()
+    tx.onerror    = e => reject(e.target.error)
+  })
+}
+
+// Merge voters for a new import: removes existing voters for the same booths
+// (matched by v._boothNo), then inserts the new voters.
+export async function mergeVoterCache(newVoters, boothNos) {
+  const boothSet = new Set(boothNos.map(String))
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx    = db.transaction(VOTER_STORE, 'readwrite')
+    const store = tx.objectStore(VOTER_STORE)
+    const req   = store.getAll()
+    req.onsuccess = () => {
+      const kept = (req.result || []).filter(v => !boothSet.has(String(v._boothNo || '')))
+      store.clear()
+      for (const v of kept)      store.put(v)
+      for (const v of newVoters) store.put(v)
+    }
+    tx.oncomplete = () => resolve()
+    tx.onerror    = e => reject(e.target.error)
+  })
+}
+
+// Remove voters for specific booths from the cache (used on delete).
+export async function removeVotersByBooths(boothNos) {
+  const boothSet = new Set(boothNos.map(String))
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx    = db.transaction(VOTER_STORE, 'readwrite')
+    const store = tx.objectStore(VOTER_STORE)
+    const req   = store.getAll()
+    req.onsuccess = () => {
+      const kept = (req.result || []).filter(v => !boothSet.has(String(v._boothNo || '')))
+      store.clear()
+      for (const v of kept) store.put(v)
+    }
     tx.oncomplete = () => resolve()
     tx.onerror    = e => reject(e.target.error)
   })
@@ -43,16 +102,9 @@ export async function loadCachedVoters() {
   }
 }
 
-// Metadata (small) lives in localStorage — synchronous and instant.
-const META_KEY = 'cast_import_meta'
-export function cacheImportMeta(meta) {
-  try { localStorage.setItem(META_KEY, JSON.stringify(meta)) } catch {}
-}
-export function loadCachedImportMeta() {
-  try { return JSON.parse(localStorage.getItem(META_KEY)) } catch { return null }
-}
 export async function clearVoterCache() {
   localStorage.removeItem(META_KEY)
+  localStorage.removeItem(METAS_KEY)
   try {
     const db = await openDB()
     await new Promise((resolve, reject) => {
