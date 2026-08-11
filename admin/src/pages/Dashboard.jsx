@@ -5,7 +5,6 @@ import KPIGrid from '../components/dashboard/KPIGrid'
 import ChartsRow1 from '../components/dashboard/ChartsRow1'
 import TablesRow2 from '../components/dashboard/TablesRow2'
 import ChartsRow3 from '../components/dashboard/ChartsRow3'
-import BottomSection from '../components/dashboard/BottomSection'
 
 function FilterBtn({ label, value }) {
   return (
@@ -94,7 +93,6 @@ export default function Dashboard() {
         <ChartsRow1 stats={stats} />
         <TablesRow2 stats={stats} />
         <ChartsRow3 />
-        <BottomSection stats={stats} />
       </div>
     </div>
   )
