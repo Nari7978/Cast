@@ -18,7 +18,7 @@ const OPTION_COLORS = [
 export default function PollScreen() {
   const router  = useRouter()
   const top     = useSafeAreaInsets().top
-  const { agent, activePoll } = useStore()
+  const { agent, activePoll, voters } = useStore()
 
   const [counts,    setCounts]    = useState({})
   const [submitting, setSubmitting] = useState(null) // option index being tapped
@@ -79,8 +79,9 @@ export default function PollScreen() {
     )
   }
 
-  const total = Object.values(counts).reduce((s, n) => s + n, 0)
-  const options = activePoll.options || []
+  const total       = Object.values(counts).reduce((s, n) => s + n, 0)
+  const boothTotal  = voters?.length || 0
+  const options     = activePoll.options || []
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -97,8 +98,8 @@ export default function PollScreen() {
           <Text style={styles.headerTitle} numberOfLines={2}>{activePoll.question || activePoll.title}</Text>
         </View>
         <View style={styles.totalBadge}>
-          <Text style={styles.totalNum}>{total}</Text>
-          <Text style={styles.totalLabel}>votes</Text>
+          <Text style={styles.totalNum}>{total}{boothTotal > 0 ? `/${boothTotal}` : ''}</Text>
+          <Text style={styles.totalLabel}>responses</Text>
         </View>
       </View>
 
@@ -114,12 +115,11 @@ export default function PollScreen() {
           <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
         ) : (
           options.map((opt, idx) => {
-            const label   = typeof opt === 'string' ? opt : opt.label
-            const imgUrl  = activePoll.optionImages?.[label]
-            const count   = counts[label] || 0
-            const pct     = total ? Math.round((count / total) * 100) : 0
-            const color   = OPTION_COLORS[idx % OPTION_COLORS.length]
-            const isBusy  = submitting === idx
+            const label  = typeof opt === 'string' ? opt : opt.label
+            const imgUrl = activePoll.optionImages?.[label]
+            const count  = counts[label] || 0
+            const color  = OPTION_COLORS[idx % OPTION_COLORS.length]
+            const isBusy = submitting === idx
 
             return (
               <Animated.View key={label} style={{ transform: [{ scale: scaleAnims[idx] }] }}>
@@ -129,7 +129,6 @@ export default function PollScreen() {
                   activeOpacity={0.9}
                   disabled={submitting !== null}
                 >
-                  <View style={[styles.optionBar, { width: `${pct}%`, backgroundColor: color + '22' }]} />
                   <View style={[styles.optionContent, imgUrl && { paddingVertical: 14 }]}>
                     {imgUrl ? (
                       <Image
@@ -140,13 +139,10 @@ export default function PollScreen() {
                       <View style={[styles.optionDot, { backgroundColor: color }]} />
                     )}
                     <Text style={[styles.optionLabel, imgUrl && styles.optionLabelLarge]}>{label}</Text>
-                    <View style={styles.optionRight}>
-                      {isBusy
-                        ? <ActivityIndicator size="small" color={color} />
-                        : <Text style={[styles.optionCount, { color }]}>{count}</Text>
-                      }
-                      <Text style={styles.optionPct}>{pct}%</Text>
-                    </View>
+                    {isBusy
+                      ? <ActivityIndicator size="small" color={color} />
+                      : <Text style={[styles.optionCount, { color }]}>{count}</Text>
+                    }
                   </View>
                 </TouchableOpacity>
               </Animated.View>
@@ -154,11 +150,16 @@ export default function PollScreen() {
           })
         )}
 
-        {/* Total row */}
-        {!loading && total > 0 && (
+        {/* Coverage row */}
+        {!loading && (
           <View style={styles.totalRow}>
-            <Text style={styles.totalRowLabel}>Total Votes Recorded</Text>
-            <Text style={styles.totalRowValue}>{total}</Text>
+            <View>
+              <Text style={styles.totalRowLabel}>Poll Responses Received</Text>
+              {boothTotal > 0 && (
+                <Text style={styles.totalRowSub}>out of {boothTotal} booth members</Text>
+              )}
+            </View>
+            <Text style={styles.totalRowValue}>{total}{boothTotal > 0 ? `/${boothTotal}` : ''}</Text>
           </View>
         )}
 
@@ -194,28 +195,21 @@ const styles = StyleSheet.create({
   optionBtn: {
     borderRadius: 16,
     borderWidth: 2,
-    overflow: 'hidden',
     marginBottom: 12,
     backgroundColor: theme.white,
     ...theme.shadowSm,
     minHeight: 72,
     justifyContent: 'center',
   },
-  optionBar: {
-    position: 'absolute', top: 0, left: 0, bottom: 0,
-    borderRadius: 14,
-  },
   optionContent: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 18, paddingVertical: 18, gap: 12,
   },
-  optionDot:         { width: 12, height: 12, borderRadius: 6 },
-  optionLabel:       { flex: 1, fontSize: 16, fontWeight: '700', color: theme.text },
-  optionLabelLarge:  { fontSize: 17, fontWeight: '800' },
-  candidatePhoto:    { width: 68, height: 68, borderRadius: 34, borderWidth: 2.5, backgroundColor: '#F1F5F9' },
-  optionRight:       { alignItems: 'flex-end', gap: 2 },
-  optionCount:       { fontSize: 22, fontWeight: '900' },
-  optionPct:         { fontSize: 11, color: theme.textMuted, fontWeight: '600' },
+  optionDot:        { width: 12, height: 12, borderRadius: 6 },
+  optionLabel:      { flex: 1, fontSize: 16, fontWeight: '700', color: theme.text },
+  optionLabelLarge: { fontSize: 17, fontWeight: '800' },
+  candidatePhoto:   { width: 68, height: 68, borderRadius: 34, borderWidth: 2.5, backgroundColor: '#F1F5F9' },
+  optionCount:      { fontSize: 22, fontWeight: '900' },
 
   totalRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -223,5 +217,6 @@ const styles = StyleSheet.create({
     marginTop: 4, ...theme.shadowSm,
   },
   totalRowLabel: { color: theme.textSub, fontSize: 13, fontWeight: '600' },
-  totalRowValue: { color: theme.text,    fontSize: 20, fontWeight: '900' },
+  totalRowSub:   { color: theme.textMuted, fontSize: 11, marginTop: 2 },
+  totalRowValue: { color: theme.text, fontSize: 20, fontWeight: '900' },
 })
