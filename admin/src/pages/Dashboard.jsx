@@ -146,7 +146,16 @@ export default function Dashboard() {
     setLoading(false)
   }
 
-  useEffect(() => { loadStats() }, [])
+  useEffect(() => {
+    loadStats()
+    const channel = supabase.channel('dashboard_live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, loadStats)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agents' },      loadStats)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'responses' },   loadStats)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' },       loadStats)
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [])
 
   const syncLabel = synced
     ? `Synced at ${synced.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
