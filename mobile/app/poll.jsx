@@ -20,12 +20,17 @@ export default function PollScreen() {
   const top     = useSafeAreaInsets().top
   const { agent, activePoll, voters } = useStore()
 
-  const [counts,    setCounts]    = useState({})
-  const [submitting, setSubmitting] = useState(null) // option index being tapped
-  const [loading,   setLoading]   = useState(true)
-  const scaleAnims = useRef((activePoll?.options || []).map(() => new Animated.Value(1))).current
+  const [counts,     setCounts]     = useState({})
+  const [submitting, setSubmitting] = useState(null)
+  const [loading,    setLoading]    = useState(true)
 
-  // Load existing tally for this poll
+  const optionCount  = activePoll?.options?.length || 0
+  const scaleAnims   = useRef(Array.from({ length: optionCount }, () => new Animated.Value(1))).current
+  const flashAnims   = useRef(Array.from({ length: optionCount }, () => new Animated.Value(0))).current
+  const floatOpacity = useRef(Array.from({ length: optionCount }, () => new Animated.Value(0))).current
+  const floatY       = useRef(Array.from({ length: optionCount }, () => new Animated.Value(0))).current
+  const [flashColor, setFlashColor] = useState({}) // idx → 'success' | 'error'
+
   useEffect(() => {
     if (!activePoll) return
     fetchTally()
@@ -45,15 +50,53 @@ export default function PollScreen() {
     setLoading(false)
   }
 
+  function playSuccess(idx) {
+    setFlashColor(c => ({ ...c, [idx]: 'success' }))
+
+    // Card scale pop
+    Animated.sequence([
+      Animated.timing(scaleAnims[idx], { toValue: 0.94, duration: 70, useNativeDriver: true }),
+      Animated.spring(scaleAnims[idx], { toValue: 1, friction: 3, useNativeDriver: true }),
+    ]).start()
+
+    // Green flash overlay: in → hold → out
+    Animated.sequence([
+      Animated.timing(flashAnims[idx], { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(flashAnims[idx], { toValue: 0, duration: 550, useNativeDriver: true }),
+    ]).start()
+
+    // Floating "+1 ✓" rises up and fades
+    floatOpacity[idx].setValue(1)
+    floatY[idx].setValue(0)
+    Animated.parallel([
+      Animated.timing(floatY[idx],       { toValue: -52, duration: 700, useNativeDriver: true }),
+      Animated.sequence([
+        Animated.delay(180),
+        Animated.timing(floatOpacity[idx], { toValue: 0, duration: 480, useNativeDriver: true }),
+      ]),
+    ]).start()
+  }
+
+  function playError(idx) {
+    setFlashColor(c => ({ ...c, [idx]: 'error' }))
+
+    // Quick shake
+    Animated.sequence([
+      Animated.timing(scaleAnims[idx], { toValue: 1.03, duration: 60, useNativeDriver: true }),
+      Animated.timing(scaleAnims[idx], { toValue: 0.97, duration: 60, useNativeDriver: true }),
+      Animated.spring(scaleAnims[idx], { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start()
+
+    // Red flash
+    Animated.sequence([
+      Animated.timing(flashAnims[idx], { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(flashAnims[idx], { toValue: 0, duration: 500, useNativeDriver: true }),
+    ]).start()
+  }
+
   async function handleTap(optionLabel, idx) {
     if (submitting !== null) return
     setSubmitting(idx)
-
-    // Bounce animation
-    Animated.sequence([
-      Animated.timing(scaleAnims[idx], { toValue: 0.92, duration: 80, useNativeDriver: true }),
-      Animated.spring(scaleAnims[idx],  { toValue: 1,    friction: 4,  useNativeDriver: true }),
-    ]).start()
 
     try {
       await supabase.from('poll_responses').insert({
@@ -63,7 +106,10 @@ export default function PollScreen() {
         recordedAt: new Date().toISOString(),
       })
       setCounts(prev => ({ ...prev, [optionLabel]: (prev[optionLabel] || 0) + 1 }))
-    } catch (_) {}
+      playSuccess(idx)
+    } catch (_) {
+      playError(idx)
+    }
     setSubmitting(null)
   }
 
@@ -79,9 +125,9 @@ export default function PollScreen() {
     )
   }
 
-  const total       = Object.values(counts).reduce((s, n) => s + n, 0)
-  const boothTotal  = voters?.length || 0
-  const options     = activePoll.options || []
+  const total      = Object.values(counts).reduce((s, n) => s + n, 0)
+  const boothTotal = voters?.length || 0
+  const options    = activePoll.options || []
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -115,37 +161,69 @@ export default function PollScreen() {
           <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
         ) : (
           options.map((opt, idx) => {
-            const label  = typeof opt === 'string' ? opt : opt.label
-            const imgUrl = activePoll.optionImages?.[label]
-            const count  = counts[label] || 0
-            const color  = OPTION_COLORS[idx % OPTION_COLORS.length]
-            const isBusy = submitting === idx
+            const label   = typeof opt === 'string' ? opt : opt.label
+            const imgUrl  = activePoll.optionImages?.[label]
+            const count   = counts[label] || 0
+            const color   = OPTION_COLORS[idx % OPTION_COLORS.length]
+            const isBusy  = submitting === idx
+            const isError = flashColor[idx] === 'error'
 
             return (
-              <Animated.View key={label} style={{ transform: [{ scale: scaleAnims[idx] }] }}>
-                <TouchableOpacity
-                  style={[styles.optionBtn, { borderColor: color, minHeight: imgUrl ? 100 : 72 }]}
-                  onPress={() => handleTap(label, idx)}
-                  activeOpacity={0.9}
-                  disabled={submitting !== null}
+              <View key={label} style={styles.optionWrap}>
+                {/* Floating +1 ✓ */}
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.floatBadge,
+                    {
+                      opacity:   floatOpacity[idx],
+                      transform: [{ translateY: floatY[idx] }],
+                      borderColor: color,
+                    },
+                  ]}
                 >
-                  <View style={[styles.optionContent, imgUrl && { paddingVertical: 14 }]}>
-                    {imgUrl ? (
-                      <Image
-                        source={{ uri: imgUrl }}
-                        style={[styles.candidatePhoto, { borderColor: color }]}
-                      />
-                    ) : (
-                      <View style={[styles.optionDot, { backgroundColor: color }]} />
-                    )}
-                    <Text style={[styles.optionLabel, imgUrl && styles.optionLabelLarge]}>{label}</Text>
-                    {isBusy
-                      ? <ActivityIndicator size="small" color={color} />
-                      : <Text style={[styles.optionCount, { color }]}>{count}</Text>
-                    }
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
+                  <Ionicons name="checkmark-circle" size={14} color={color} />
+                  <Text style={[styles.floatText, { color }]}>+1 Recorded</Text>
+                </Animated.View>
+
+                <Animated.View style={{ transform: [{ scale: scaleAnims[idx] }] }}>
+                  <TouchableOpacity
+                    style={[styles.optionBtn, { borderColor: color, minHeight: imgUrl ? 100 : 72 }]}
+                    onPress={() => handleTap(label, idx)}
+                    activeOpacity={0.9}
+                    disabled={submitting !== null}
+                  >
+                    {/* Flash overlay */}
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[
+                        StyleSheet.absoluteFill,
+                        {
+                          borderRadius: 14,
+                          backgroundColor: isError ? '#EF444430' : color + '28',
+                          opacity: flashAnims[idx],
+                        },
+                      ]}
+                    />
+
+                    <View style={[styles.optionContent, imgUrl && { paddingVertical: 14 }]}>
+                      {imgUrl ? (
+                        <Image
+                          source={{ uri: imgUrl }}
+                          style={[styles.candidatePhoto, { borderColor: color }]}
+                        />
+                      ) : (
+                        <View style={[styles.optionDot, { backgroundColor: color }]} />
+                      )}
+                      <Text style={[styles.optionLabel, imgUrl && styles.optionLabelLarge]}>{label}</Text>
+                      {isBusy
+                        ? <ActivityIndicator size="small" color={color} />
+                        : <Text style={[styles.optionCount, { color }]}>{count}</Text>
+                      }
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              </View>
             )
           })
         )}
@@ -178,10 +256,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
-  backBtn: { padding: 4, marginTop: 2 },
-  liveRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#fff' },
-  liveText: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
+  backBtn:     { padding: 4, marginTop: 2 },
+  liveRow:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  liveDot:     { width: 7, height: 7, borderRadius: 4, backgroundColor: '#fff' },
+  liveText:    { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
   headerTitle: { color: '#fff', fontSize: 17, fontWeight: '800', lineHeight: 22 },
 
   totalBadge: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginTop: 2 },
@@ -189,13 +267,35 @@ const styles = StyleSheet.create({
   totalLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 9, fontWeight: '700', letterSpacing: 0.8, marginTop: 1 },
 
   body: { padding: 16 },
-
   hint: { color: theme.textMuted, fontSize: 12, textAlign: 'center', marginBottom: 20, lineHeight: 17 },
+
+  optionWrap: { marginBottom: 12 },
+
+  floatBadge: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 0,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderRadius: 99,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  floatText: { fontSize: 13, fontWeight: '800' },
 
   optionBtn: {
     borderRadius: 16,
     borderWidth: 2,
-    marginBottom: 12,
+    overflow: 'hidden',
     backgroundColor: theme.white,
     ...theme.shadowSm,
     minHeight: 72,
