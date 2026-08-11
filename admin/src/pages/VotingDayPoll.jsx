@@ -4,7 +4,7 @@ import {
   fetchPolls, createPoll, updatePoll, deletePoll,
   setActivePoll, deactivateAllPolls, fetchPollResponses, clearPollResponses,
 } from '../firebase/pollService'
-import { Vote, Plus, Trash2, Play, Square, RefreshCw, BarChart2, X, Radio, Download, Trophy, TrendingUp } from 'lucide-react'
+import { Vote, Plus, Trash2, Play, Square, RefreshCw, BarChart2, X, Radio, Download, Trophy, TrendingUp, Camera } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -174,6 +174,24 @@ function PollModal({ initial, onClose, onSave }) {
   const [saving,   setSaving]   = useState(false)
   const [err,      setErr]      = useState('')
 
+  // optionImages: { [index]: { file?: File, preview: string, url?: string } }
+  const [optionImages, setOptionImages] = useState(() => {
+    if (!initial?.optionImages) return {}
+    const map = {}
+    ;(initial?.options || []).forEach((label, i) => {
+      const url = initial.optionImages[label]
+      if (url) map[i] = { preview: url, url }
+    })
+    return map
+  })
+
+  const handleImagePick = (i, file) => {
+    if (!file) return
+    const preview = URL.createObjectURL(file)
+    setOptionImages(prev => ({ ...prev, [i]: { file, preview } }))
+  }
+  const removeOptionImage = (i) => setOptionImages(prev => { const n = { ...prev }; delete n[i]; return n })
+
   useEffect(() => {
     supabase.from('booths').select('*').order('inserted_at', { ascending: true })
       .then(({ data }) => {
@@ -188,8 +206,19 @@ function PollModal({ initial, onClose, onSave }) {
   }
 
   const addOpt    = () => setOptions(o => [...o, ''])
-  const removeOpt = (i) => setOptions(o => o.filter((_, idx) => idx !== i))
-  const setOpt    = (i, v) => setOptions(o => o.map((x, idx) => idx === i ? v : x))
+  const removeOpt = (i) => {
+    setOptions(o => o.filter((_, idx) => idx !== i))
+    setOptionImages(prev => {
+      const rebuilt = {}
+      Object.entries(prev).forEach(([k, v]) => {
+        const ki = parseInt(k)
+        if (ki < i)       rebuilt[ki]     = v
+        else if (ki > i)  rebuilt[ki - 1] = v
+      })
+      return rebuilt
+    })
+  }
+  const setOpt = (i, v) => setOptions(o => o.map((x, idx) => idx === i ? v : x))
 
   const handleSave = async () => {
     const opts = options.map(o => o.trim()).filter(Boolean)
@@ -198,12 +227,32 @@ function PollModal({ initial, onClose, onSave }) {
     if (opts.length < 2)  { setErr('At least 2 options required'); return }
     setSaving(true)
     try {
+      // Upload new images to Supabase Storage
+      const uploadedImages = {}
+      for (const [idxStr, imgData] of Object.entries(optionImages)) {
+        const label = opts[parseInt(idxStr)]
+        if (!label) continue
+        if (imgData.file) {
+          const ext  = imgData.file.name.split('.').pop() || 'jpg'
+          const path = `${Date.now()}-${idxStr}.${ext}`
+          const { error } = await supabase.storage
+            .from('poll-images')
+            .upload(path, imgData.file, { upsert: true, contentType: imgData.file.type })
+          if (!error) {
+            const { data: { publicUrl } } = supabase.storage.from('poll-images').getPublicUrl(path)
+            uploadedImages[label] = publicUrl
+          }
+        } else if (imgData.url) {
+          uploadedImages[label] = imgData.url
+        }
+      }
       await onSave({
         title: title.trim(),
         question: question.trim(),
         options: opts,
         assignedBooths: assigned,
         status: initial?.status || 'Inactive',
+        optionImages: uploadedImages,
       })
       onClose()
     } catch (e) { setErr(e.message) }
@@ -235,13 +284,34 @@ function PollModal({ initial, onClose, onSave }) {
           {/* Options */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Options</label>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {options.map((opt, i) => (
                 <div key={i} className="flex gap-2 items-center">
-                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
-                    style={{ background: COLORS[i % COLORS.length] }}>{i + 1}</div>
-                  <input className="flex-1 border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300"
+                  {/* Candidate photo upload */}
+                  <label className="cursor-pointer flex-shrink-0 group">
+                    {optionImages[i]?.preview ? (
+                      <div className="relative">
+                        <img src={optionImages[i].preview} alt=""
+                          className="w-11 h-11 rounded-full object-cover border-2 shadow-sm"
+                          style={{ borderColor: COLORS[i % COLORS.length] }} />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center"
+                          style={{ background: COLORS[i % COLORS.length] }}>
+                          <Camera size={8} color="#fff" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-11 h-11 rounded-full border-2 border-dashed flex items-center justify-center hover:bg-gray-50 transition-colors"
+                        style={{ borderColor: COLORS[i % COLORS.length] + '60' }}>
+                        <Camera size={15} style={{ color: COLORS[i % COLORS.length] }} className="opacity-50 group-hover:opacity-80" />
+                      </div>
+                    )}
+                    <input type="file" accept="image/*" className="sr-only"
+                      onChange={e => handleImagePick(i, e.target.files[0])} />
+                  </label>
+
+                  <input className="flex-1 border rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-300"
                     value={opt} onChange={e => setOpt(i, e.target.value)} placeholder={`Option ${i + 1}`} />
+
                   {options.length > 2 && (
                     <button onClick={() => removeOpt(i)} className="p-1 rounded-lg text-red-400 hover:bg-red-50"><Trash2 size={14} /></button>
                   )}
@@ -411,22 +481,36 @@ function ResultsPanel({ poll, responses, boothVoterMap = {}, onClear, onRefresh,
       </div>
 
       {/* Overall tally */}
-      <div className="p-5 space-y-3 border-b">
+      <div className="p-5 space-y-4 border-b">
         <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Overall Results</p>
         {options.map((opt, i) => {
-          const n = counts[opt] || 0
-          const p = pct(n, total)
+          const n      = counts[opt] || 0
+          const p      = pct(n, total)
+          const imgUrl = poll.optionImages?.[opt]
+          const color  = COLORS[i % COLORS.length]
           return (
             <div key={opt}>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="font-semibold text-gray-800">{opt}</span>
-                <span className="font-bold tabular-nums" style={{ color: COLORS[i % COLORS.length] }}>
-                  {n} <span className="text-gray-400 font-normal">({p}%)</span>
-                </span>
-              </div>
-              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${p}%`, background: COLORS[i % COLORS.length] }} />
+              <div className="flex items-center gap-3 mb-1.5">
+                {imgUrl ? (
+                  <img src={imgUrl} alt={opt}
+                    className="w-9 h-9 rounded-full object-cover flex-shrink-0 border-2"
+                    style={{ borderColor: color }} />
+                ) : (
+                  <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
+                    style={{ background: color }}>{opt[0]?.toUpperCase()}</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-semibold text-gray-800 text-sm truncate">{opt}</span>
+                    <span className="font-bold tabular-nums ml-2 flex-shrink-0" style={{ color }}>
+                      {n} <span className="text-gray-400 font-normal text-xs">({p}%)</span>
+                    </span>
+                  </div>
+                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${p}%`, background: color }} />
+                  </div>
+                </div>
               </div>
             </div>
           )

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, Animated,
+  ActivityIndicator, Animated, Image,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -115,24 +115,32 @@ export default function PollScreen() {
           <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
         ) : (
           options.map((opt, idx) => {
-            const label = typeof opt === 'string' ? opt : opt.label
-            const count = counts[label] || 0
-            const pct   = total ? Math.round((count / total) * 100) : 0
-            const color = OPTION_COLORS[idx % OPTION_COLORS.length]
-            const isBusy = submitting === idx
+            const label   = typeof opt === 'string' ? opt : opt.label
+            const imgUrl  = activePoll.optionImages?.[label]
+            const count   = counts[label] || 0
+            const pct     = total ? Math.round((count / total) * 100) : 0
+            const color   = OPTION_COLORS[idx % OPTION_COLORS.length]
+            const isBusy  = submitting === idx
 
             return (
               <Animated.View key={label} style={{ transform: [{ scale: scaleAnims[idx] }] }}>
                 <TouchableOpacity
-                  style={[styles.optionBtn, { borderColor: color }]}
+                  style={[styles.optionBtn, { borderColor: color, minHeight: imgUrl ? 100 : 72 }]}
                   onPress={() => handleTap(label, idx)}
                   activeOpacity={0.9}
                   disabled={submitting !== null}
                 >
                   <View style={[styles.optionBar, { width: `${pct}%`, backgroundColor: color + '22' }]} />
-                  <View style={styles.optionContent}>
-                    <View style={[styles.optionDot, { backgroundColor: color }]} />
-                    <Text style={styles.optionLabel}>{label}</Text>
+                  <View style={[styles.optionContent, imgUrl && { paddingVertical: 14 }]}>
+                    {imgUrl ? (
+                      <Image
+                        source={{ uri: imgUrl }}
+                        style={[styles.candidatePhoto, { borderColor: color }]}
+                      />
+                    ) : (
+                      <View style={[styles.optionDot, { backgroundColor: color }]} />
+                    )}
+                    <Text style={[styles.optionLabel, imgUrl && styles.optionLabelLarge]}>{label}</Text>
                     <View style={styles.optionRight}>
                       {isBusy
                         ? <ActivityIndicator size="small" color={color} />
@@ -202,11 +210,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 18, paddingVertical: 18, gap: 12,
   },
-  optionDot:   { width: 12, height: 12, borderRadius: 6 },
-  optionLabel: { flex: 1, fontSize: 16, fontWeight: '700', color: theme.text },
-  optionRight: { alignItems: 'flex-end', gap: 2 },
-  optionCount: { fontSize: 22, fontWeight: '900' },
-  optionPct:   { fontSize: 11, color: theme.textMuted, fontWeight: '600' },
+  optionDot:         { width: 12, height: 12, borderRadius: 6 },
+  optionLabel:       { flex: 1, fontSize: 16, fontWeight: '700', color: theme.text },
+  optionLabelLarge:  { fontSize: 17, fontWeight: '800' },
+  candidatePhoto:    { width: 68, height: 68, borderRadius: 34, borderWidth: 2.5, backgroundColor: '#F1F5F9' },
+  optionRight:       { alignItems: 'flex-end', gap: 2 },
+  optionCount:       { fontSize: 22, fontWeight: '900' },
+  optionPct:         { fontSize: 11, color: theme.textMuted, fontWeight: '600' },
 
   totalRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
