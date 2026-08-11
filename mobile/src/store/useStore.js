@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-const AGENT_KEY    = '@cast/agent'
-const PENDING_KEY  = '@cast/pending_responses'
+const AGENT_KEY       = '@cast/agent'
+const PENDING_KEY     = '@cast/pending_responses'
+const POLL_PENDING_KEY = '@cast/pending_poll_responses'
 
 export const useStore = create((set, get) => ({
   // ── Auth ──────────────────────────────────────────────────────────────
@@ -26,8 +27,8 @@ export const useStore = create((set, get) => ({
   },
 
   logout: async () => {
-    await AsyncStorage.multiRemove([AGENT_KEY, PENDING_KEY])
-    set({ agent: null, isAuthenticated: false, responses: {}, pendingResponses: [] })
+    await AsyncStorage.multiRemove([AGENT_KEY, PENDING_KEY, POLL_PENDING_KEY])
+    set({ agent: null, isAuthenticated: false, responses: {}, pendingResponses: [], pendingPollResponses: [] })
   },
 
   // ── Survey / Phase ────────────────────────────────────────────────────
@@ -88,5 +89,31 @@ export const useStore = create((set, get) => ({
     if (!r) return 'not_started'
     if (r.submittedAt) return 'completed'
     return 'in_progress'
+  },
+
+  // ── Offline Poll Responses ────────────────────────────────────────────
+  pendingPollResponses: [],
+
+  loadPendingPolls: async () => {
+    try {
+      const raw = await AsyncStorage.getItem(POLL_PENDING_KEY)
+      set({ pendingPollResponses: raw ? JSON.parse(raw) : [] })
+    } catch (_) {}
+  },
+
+  savePollResponse: async (response) => {
+    const { pendingPollResponses } = get()
+    const updated = [...pendingPollResponses, response]
+    await AsyncStorage.setItem(POLL_PENDING_KEY, JSON.stringify(updated))
+    set({ pendingPollResponses: updated })
+  },
+
+  markPollSynced: async (localId) => {
+    const { pendingPollResponses } = get()
+    const updated = pendingPollResponses.map(r =>
+      r.localId === localId ? { ...r, synced: true } : r
+    )
+    await AsyncStorage.setItem(POLL_PENDING_KEY, JSON.stringify(updated))
+    set({ pendingPollResponses: updated })
   },
 }))

@@ -19,6 +19,7 @@ export function startSyncListener() {
   unsubscribe = NetInfo.addEventListener(state => {
     if (state.isConnected && state.isInternetReachable) {
       syncPending()
+      syncPendingPolls()
     }
   })
 }
@@ -98,6 +99,22 @@ export async function syncPending() {
     }
   } catch (_) {}
   syncing = false
+}
+
+export async function syncPendingPolls() {
+  try {
+    const { pendingPollResponses, markPollSynced } = useStore.getState()
+    const unsynced = pendingPollResponses.filter(r => !r.synced)
+    for (const r of unsynced) {
+      const { error } = await supabase.from('poll_responses').insert({
+        pollId:     r.pollId,
+        option:     r.option,
+        boothNo:    r.boothNo,
+        recordedAt: r.recordedAt,
+      })
+      if (!error) await markPollSynced(r.localId)
+    }
+  } catch (_) {}
 }
 
 export async function fetchActiveSurveyData(boothNo) {

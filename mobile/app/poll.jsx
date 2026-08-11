@@ -6,9 +6,12 @@ import {
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import NetInfo from '@react-native-community/netinfo'
+import uuid from 'react-native-uuid'
 import { theme } from '../src/theme'
 import { useStore } from '../src/store/useStore'
 import { supabase } from '../src/supabase/config'
+import { syncPendingPolls } from '../src/services/sync'
 
 const OPTION_COLORS = [
   '#5B3FD4', '#E11D48', '#0EA5E9', '#10B981',
@@ -18,18 +21,30 @@ const OPTION_COLORS = [
 export default function PollScreen() {
   const router  = useRouter()
   const top     = useSafeAreaInsets().top
-  const { agent, activePoll, voters } = useStore()
+  const { agent, activePoll, voters, savePollResponse } = useStore()
 
   const [counts,     setCounts]     = useState({})
   const [submitting, setSubmitting] = useState(null)
   const [loading,    setLoading]    = useState(true)
+  const [isOffline,  setIsOffline]  = useState(false)
+
+  // Track network state
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener(state => {
+      const offline = !(state.isConnected && state.isInternetReachable)
+      setIsOffline(offline)
+      if (!offline) syncPendingPolls()
+    })
+    return unsub
+  }, [])
 
   const optionCount  = activePoll?.options?.length || 0
   const scaleAnims   = useRef(Array.from({ length: optionCount }, () => new Animated.Value(1))).current
   const flashAnims   = useRef(Array.from({ length: optionCount }, () => new Animated.Value(0))).current
   const floatOpacity = useRef(Array.from({ length: optionCount }, () => new Animated.Value(0))).current
   const floatY       = useRef(Array.from({ length: optionCount }, () => new Animated.Value(0))).current
-  const [flashColor, setFlashColor] = useState({}) // idx → 'success' | 'error'
+  const [flashColor,  setFlashColor]  = useState({}) // idx → 'success' | 'error'
+  const [floatLabel,  setFloatLabel]  = useState({}) // idx → label string
 
   useEffect(() => {
     if (!activePoll) return
@@ -50,8 +65,9 @@ export default function PollScreen() {
     setLoading(false)
   }
 
-  function playSuccess(idx) {
+  function playSuccess(idx, offline = false) {
     setFlashColor(c => ({ ...c, [idx]: 'success' }))
+    setFloatLabel(l => ({ ...l, [idx]: offline ? '⏳ Saved offline' : '+1 Recorded' }))
 
     // Card scale pop
     Animated.sequence([
@@ -98,18 +114,39 @@ export default function PollScreen() {
     if (submitting !== null) return
     setSubmitting(idx)
 
-    try {
-      await supabase.from('poll_responses').insert({
-        pollId:     activePoll.id,
-        option:     optionLabel,
-        boothNo:    String(agent?.boothNo || ''),
-        recordedAt: new Date().toISOString(),
-      })
-      setCounts(prev => ({ ...prev, [optionLabel]: (prev[optionLabel] || 0) + 1 }))
-      playSuccess(idx)
-    } catch (_) {
-      playError(idx)
+    const record = {
+      localId:    uuid.v4(),
+      pollId:     activePoll.id,
+      option:     optionLabel,
+      boothNo:    String(agent?.boothNo || ''),
+      recordedAt: new Date().toISOString(),
+      synced:     false,
     }
+
+    const net = await NetInfo.fetch()
+    const online = net.isConnected && net.isInternetReachable
+
+    if (online) {
+      try {
+        await supabase.from('poll_responses').insert({
+          pollId:     record.pollId,
+          option:     record.option,
+          boothNo:    record.boothNo,
+          recordedAt: record.recordedAt,
+        })
+        // Online success — no need to queue
+      } catch (_) {
+        // Network call failed despite appearing online — save locally as fallback
+        await savePollResponse(record)
+      }
+    } else {
+      // Offline — queue for later sync
+      await savePollResponse(record)
+    }
+
+    // Optimistically update count and show success animation regardless
+    setCounts(prev => ({ ...prev, [optionLabel]: (prev[optionLabel] || 0) + 1 }))
+    playSuccess(idx, !online)
     setSubmitting(null)
   }
 
@@ -155,6 +192,12 @@ export default function PollScreen() {
         showsVerticalScrollIndicator={false}
         overScrollMode="never"
       >
+        {isOffline && (
+          <View style={styles.offlineBanner}>
+            <Ionicons name="cloud-offline-outline" size={14} color="#92400E" />
+            <Text style={styles.offlineText}>You're offline — votes are saved locally and will sync automatically when connected</Text>
+          </View>
+        )}
         <Text style={styles.hint}>Tap an option to record a vote — each tap counts as one vote</Text>
 
         {loading ? (
@@ -182,8 +225,8 @@ export default function PollScreen() {
                     },
                   ]}
                 >
-                  <Ionicons name="checkmark-circle" size={14} color={color} />
-                  <Text style={[styles.floatText, { color }]}>+1 Recorded</Text>
+                  <Ionicons name={floatLabel[idx]?.startsWith('⏳') ? 'cloud-offline-outline' : 'checkmark-circle'} size={14} color={color} />
+                  <Text style={[styles.floatText, { color }]}>{floatLabel[idx] || '+1 Recorded'}</Text>
                 </Animated.View>
 
                 <Animated.View style={{ transform: [{ scale: scaleAnims[idx] }] }}>
@@ -268,6 +311,13 @@ const styles = StyleSheet.create({
 
   body: { padding: 16 },
   hint: { color: theme.textMuted, fontSize: 12, textAlign: 'center', marginBottom: 20, lineHeight: 17 },
+
+  offlineBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: '#FEF3C7', borderRadius: 12, padding: 12,
+    marginBottom: 14, borderWidth: 1, borderColor: '#FCD34D',
+  },
+  offlineText: { flex: 1, fontSize: 12, color: '#92400E', fontWeight: '600', lineHeight: 17 },
 
   optionWrap: { marginBottom: 12 },
 
