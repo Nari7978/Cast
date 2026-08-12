@@ -106,7 +106,8 @@ export default function TasksScreen() {
 
   const getSurvey = (phase) => surveys.find(s => s.id === phase.surveyId) || localSurvey
 
-  const completedCount = pendingResponses.filter(r => r.submittedAt).length
+  const activeSurveyId = localSurvey?.id
+  const completedCount = pendingResponses.filter(r => r.submittedAt && (!activeSurveyId || r.surveyId === activeSurveyId)).length
   const totalCount     = voters.length
 
   if (loading) {

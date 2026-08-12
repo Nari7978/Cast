@@ -40,7 +40,15 @@ export const useStore = create((set, get) => ({
 
   activePoll: null,
 
-  setActiveSurvey: (survey) => set({ activeSurvey: survey }),
+  setActiveSurvey: (survey) => {
+    const { pendingResponses } = get()
+    const surveyId = survey?.id
+    const responses = {}
+    pendingResponses
+      .filter(r => !surveyId || r.surveyId === surveyId)
+      .forEach(r => { responses[r.voterId] = r })
+    set({ activeSurvey: survey, responses })
+  },
   setActivePhase:  (phase)  => set({ activePhase: phase }),
   setVoters:       (voters) => set({ voters, dataLoadedAt: Date.now() }),
   setActivePoll:   (poll)   => set({ activePoll: poll }),
@@ -52,20 +60,26 @@ export const useStore = create((set, get) => ({
     try {
       const raw = await AsyncStorage.getItem(PENDING_KEY)
       const pending = raw ? JSON.parse(raw) : []
+      const { activeSurvey } = get()
+      const surveyId = activeSurvey?.id
       const responses = {}
-      pending.forEach(r => { responses[r.voterId] = r })
+      pending
+        .filter(r => !surveyId || r.surveyId === surveyId)
+        .forEach(r => { responses[r.voterId] = r })
       set({ pendingResponses: pending, responses })
     } catch (_) {}
   },
 
   saveResponse: async (response) => {
-    const { pendingResponses, responses } = get()
-    const existing = pendingResponses.filter(r => r.voterId !== response.voterId)
+    const { pendingResponses, responses, activeSurvey } = get()
+    // Dedupe by voterId+surveyId so cross-survey responses for the same voter are preserved
+    const existing = pendingResponses.filter(r => !(r.voterId === response.voterId && r.surveyId === response.surveyId))
     const updated  = [...existing, response]
     await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(updated))
+    const isActiveSurvey = !activeSurvey?.id || response.surveyId === activeSurvey.id
     set({
       pendingResponses: updated,
-      responses: { ...responses, [response.voterId]: response },
+      responses: isActiveSurvey ? { ...responses, [response.voterId]: response } : responses,
     })
   },
 

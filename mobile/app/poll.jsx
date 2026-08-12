@@ -58,6 +58,7 @@ export default function PollScreen() {
         .from('poll_responses')
         .select('option')
         .eq('pollId', activePoll.id)
+        .eq('boothNo', String(agent?.boothNo || ''))
       const tally = {}
       ;(data || []).forEach(r => { tally[r.option] = (tally[r.option] || 0) + 1 })
       setCounts(tally)
