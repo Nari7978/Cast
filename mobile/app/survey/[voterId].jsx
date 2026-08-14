@@ -189,21 +189,55 @@ function QuestionRenderer({ question, value, onChange }) {
   }
 }
 
-// ── Success Screen ───────────────────────────────────────────────────────────
+// ── Submitted Answers View ───────────────────────────────────────────────────
 
-function SuccessScreen({ onBack }) {
+function SubmittedView({ voter, questions, answers, submittedAt, onBack }) {
+  const timeLabel = submittedAt
+    ? new Date(submittedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+    : null
+
   return (
-    <View style={styles.successWrap}>
-      <View style={styles.successIcon}>
-        <Ionicons name="checkmark-circle" size={64} color={theme.success} />
+    <ScrollView contentContainerStyle={styles.roWrap} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <View style={styles.roHeader}>
+        <View style={styles.roCheckCircle}>
+          <Ionicons name="checkmark" size={28} color="#fff" />
+        </View>
+        <Text style={styles.roTitle}>Survey Submitted</Text>
+        {timeLabel && <Text style={styles.roTime}>{timeLabel}</Text>}
       </View>
-      <Text style={styles.successTitle}>Survey Submitted!</Text>
-      <Text style={styles.successSub}>Response saved. Will sync automatically when connected.</Text>
+
+      {/* Voter chip */}
+      <View style={styles.roVoterRow}>
+        <Ionicons name="person-circle-outline" size={18} color={theme.primary} />
+        <Text style={styles.roVoterName} numberOfLines={1}>{vName(voter) || '—'}</Text>
+        <Text style={styles.roVoterId}>{vId(voter) || ''}</Text>
+      </View>
+
+      {/* Answers */}
+      {questions.length > 0 ? (
+        questions.map((q, i) => {
+          const val = answers?.[q.id]
+          const display = Array.isArray(val) ? val.join(', ') : (val || '—')
+          return (
+            <View key={q.id} style={styles.roCard}>
+              <Text style={styles.roQLabel}>Q{i + 1}  ·  {q.label || q.question || '—'}</Text>
+              <Text style={styles.roAnswer}>{display}</Text>
+            </View>
+          )
+        })
+      ) : (
+        <View style={styles.roCard}>
+          <Text style={[styles.roAnswer, { color: theme.textMuted }]}>No questions to display.</Text>
+        </View>
+      )}
+
       <TouchableOpacity style={styles.backListBtn} onPress={onBack} activeOpacity={0.85}>
         <Ionicons name="arrow-back" size={18} color="#fff" />
         <Text style={styles.backListBtnText}>Back to Voter List</Text>
       </TouchableOpacity>
-    </View>
+      <View style={{ height: 32 }} />
+    </ScrollView>
   )
 }
 
@@ -305,8 +339,14 @@ export default function SurveyScreen() {
 
   if (submitted) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.white, paddingTop: insets.top }}>
-        <SuccessScreen onBack={() => router.back()} />
+      <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
+        <SubmittedView
+          voter={voter}
+          questions={questions}
+          answers={existing?.answers || answers}
+          submittedAt={existing?.submittedAt}
+          onBack={() => router.back()}
+        />
       </View>
     )
   }
@@ -477,14 +517,23 @@ const styles = StyleSheet.create({
   submitBtn:    { flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 50, borderRadius: theme.radius.lg, backgroundColor: theme.success },
   submitBtnText:{ fontSize: 14, fontWeight: '700', color: '#fff' },
 
-  successWrap:  { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  successIcon:  { marginBottom: 20 },
-  successTitle: { fontSize: 24, fontWeight: '800', color: theme.text, marginBottom: 10 },
-  successSub:   { fontSize: 14, color: theme.textSub, textAlign: 'center', marginBottom: 36, lineHeight: 22 },
   backListBtn:  {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: theme.primary, borderRadius: theme.radius.xl,
-    paddingVertical: 16, paddingHorizontal: 32, marginTop: 12,
+    paddingVertical: 16, paddingHorizontal: 32, marginTop: 20, marginHorizontal: 16,
   },
   backListBtnText:{ color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  // Read-only submitted view
+  roWrap:        { padding: 16, paddingTop: 8 },
+  roHeader:      { alignItems: 'center', paddingVertical: 20 },
+  roCheckCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.success, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  roTitle:       { fontSize: 18, fontWeight: '800', color: theme.text, marginBottom: 4 },
+  roTime:        { fontSize: 12, color: theme.textMuted },
+  roVoterRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primaryLight, borderRadius: 10, padding: 10, marginBottom: 16 },
+  roVoterName:   { fontSize: 13, fontWeight: '700', color: theme.primary, flex: 1 },
+  roVoterId:     { fontSize: 11, color: theme.textSub },
+  roCard:        { backgroundColor: theme.white, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.border, padding: 14, marginBottom: 10 },
+  roQLabel:      { fontSize: 11, fontWeight: '700', color: theme.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 },
+  roAnswer:      { fontSize: 15, fontWeight: '600', color: theme.text },
 })

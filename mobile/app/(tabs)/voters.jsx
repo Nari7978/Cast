@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
 import { fetchVotersForBooth } from '../../src/services/sync'
+import { supabase } from '../../src/supabase/config'
 
 // CSV column order — each entry lists all key variants (uppercase CSV + camelCase legacy)
 const CSV_FIELDS = [
@@ -63,8 +64,28 @@ const GENDER_COLOR = {
 }
 
 // ── Voter detail bottom sheet ───────────────────────────────────────────────────
-function VoterDetailModal({ voter, response, questions, onClose }) {
+function VoterDetailModal({ voter, response, questions, activeSurveyId, onClose }) {
   const insets = useSafeAreaInsets()
+  const [history,     setHistory]     = useState([])
+  const [histLoading, setHistLoading] = useState(false)
+
+  // Fetch all historical responses for this voter from Supabase
+  useEffect(() => {
+    if (!voter?.id) return
+    setHistory([])
+    setHistLoading(true)
+    supabase
+      .from('responses')
+      .select('id, data, inserted_at')
+      .filter('data->>voterId', 'eq', voter.id)
+      .order('inserted_at', { ascending: false })
+      .then(({ data }) => {
+        setHistory((data || []).map(r => ({ ...r.data, _rowId: r.id, _at: r.inserted_at })))
+      })
+      .catch(() => {})
+      .finally(() => setHistLoading(false))
+  }, [voter?.id])
+
   if (!voter) return null
 
   const name     = vName(voter)
@@ -83,7 +104,6 @@ function VoterDetailModal({ voter, response, questions, onClose }) {
     }
   }
 
-  // Collect all keys already shown above (including relation fields so they don't leak into extraFields)
   const shownKeys = new Set([...CSV_FIELDS.flatMap(f => f.keys), ...RELATION_FIELDS.flatMap(f => f.keys)])
   const extraFields = Object.entries(voter)
     .filter(([k, v]) => !shownKeys.has(k) && !HIDDEN_KEYS.has(k) && !HIDDEN_KEYS.has(k.toLowerCase()) && v !== '' && v !== null && v !== undefined)
@@ -91,19 +111,36 @@ function VoterDetailModal({ voter, response, questions, onClose }) {
 
   const allFields = [...knownFields, ...extraFields]
 
-  // Build question ID → text map for readable survey answers
+  // Question ID → label map for current survey
   const qTextMap = {}
   ;(questions || []).forEach(q => { qTextMap[q.id] = q.text || q.label || q.question || q.id })
+
+  // Historical entries = everything from DB excluding current survey (to avoid dupe with local response)
+  const historicalEntries = history.filter(r => r.surveyId !== activeSurveyId && r.submittedAt)
+
+  function formatDate(iso) {
+    if (!iso) return ''
+    return new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  function renderAnswers(answers, map) {
+    if (!answers || Object.keys(answers).length === 0) return null
+    return Object.entries(answers).map(([qId, ans], i, arr) => (
+      <View key={qId} style={[styles.fieldRow, { alignItems: 'flex-start' }, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
+        <Text style={[styles.fieldLabel, { flex: 1.2, paddingTop: 2 }]}>{map?.[qId] || qId}</Text>
+        <Text style={[styles.fieldValue, { flex: 1.8 }]}>
+          {Array.isArray(ans) ? ans.join(', ') : String(ans ?? '') || '—'}
+        </Text>
+      </View>
+    ))
+  }
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        {/* Tap-to-close overlay */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-        {/* Sheet */}
         <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 12 }]}>
-          {/* Handle */}
           <View style={styles.sheetHandle} />
 
           {/* Voter header */}
@@ -121,7 +158,7 @@ function VoterDetailModal({ voter, response, questions, onClose }) {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-            {/* All voter fields */}
+            {/* Voter fields */}
             <Text style={styles.sectionTitle}>Voter Details</Text>
             <View style={styles.fieldCard}>
               {allFields.map(({ label, value }, idx) => (
@@ -132,52 +169,51 @@ function VoterDetailModal({ voter, response, questions, onClose }) {
               ))}
             </View>
 
-            {/* Survey participation */}
-            {response && (
+            {/* Current survey response */}
+            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Current Survey</Text>
+            {response ? (
+              <View style={styles.fieldCard}>
+                <View style={styles.fieldRow}>
+                  <Text style={styles.fieldLabel}>Status</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: response.submittedAt ? '#ECFDF5' : '#FFFBEB' }]}>
+                    <Text style={[styles.statusText, { color: response.submittedAt ? '#10B981' : '#F59E0B' }]}>
+                      {response.submittedAt ? 'Submitted' : 'In Progress'}
+                    </Text>
+                  </View>
+                </View>
+                {response.submittedAt && (
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>Submitted At</Text>
+                    <Text style={styles.fieldValue}>{formatDate(response.submittedAt)}</Text>
+                  </View>
+                )}
+                {renderAnswers(response.answers, qTextMap)}
+              </View>
+            ) : (
+              <View style={[styles.fieldCard, { alignItems: 'center', paddingVertical: 16 }]}>
+                <Ionicons name="document-outline" size={24} color={theme.border} />
+                <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>Not yet submitted for current survey</Text>
+              </View>
+            )}
+
+            {/* Historical responses from previous surveys */}
+            {histLoading ? (
+              <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 20 }} />
+            ) : historicalEntries.length > 0 ? (
               <>
-                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Survey Participation</Text>
-                <View style={styles.fieldCard}>
-                  <View style={[styles.fieldRow, { borderBottomWidth: 0 }]}>
-                    <Text style={styles.fieldLabel}>Status</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: response.submittedAt ? '#ECFDF5' : '#FFFBEB' }]}>
-                      <Text style={[styles.statusText, { color: response.submittedAt ? '#10B981' : '#F59E0B' }]}>
-                        {response.submittedAt ? 'Submitted' : 'In Progress'}
-                      </Text>
+                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Previous Surveys</Text>
+                {historicalEntries.map(r => (
+                  <View key={r._rowId} style={{ marginBottom: 10 }}>
+                    <Text style={styles.historyDate}>{formatDate(r.submittedAt || r._at)}</Text>
+                    <View style={styles.fieldCard}>
+                      {renderAnswers(r.answers, {})}
                     </View>
                   </View>
-                  {response.submittedAt && (
-                    <View style={[styles.fieldRow, { borderBottomWidth: 0 }]}>
-                      <Text style={styles.fieldLabel}>Submitted At</Text>
-                      <Text style={styles.fieldValue}>
-                        {new Date(response.submittedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </Text>
-                    </View>
-                  )}
-                  {response.answers && Object.keys(response.answers).length > 0 && (
-                    Object.entries(response.answers).map(([qId, ans], i, arr) => (
-                      <View key={qId} style={[styles.fieldRow, { alignItems: 'flex-start' }, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-                        <Text style={[styles.fieldLabel, { flex: 1.2, paddingTop: 2 }]}>{qTextMap[qId] || qId}</Text>
-                        <Text style={[styles.fieldValue, { flex: 1.8 }]}>
-                          {Array.isArray(ans) ? ans.join(', ') : String(ans ?? '') || '—'}
-                        </Text>
-                      </View>
-                    ))
-                  )}
-                </View>
+                ))}
               </>
-            )}
+            ) : null}
 
-            {!response && (
-              <>
-                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Survey Participation</Text>
-                <View style={[styles.fieldCard, { alignItems: 'center', paddingVertical: 18 }]}>
-                  <Ionicons name="document-outline" size={28} color={theme.border} />
-                  <Text style={{ fontSize: 13, color: theme.textMuted, marginTop: 8 }}>No survey submitted yet</Text>
-                </View>
-              </>
-            )}
-
-            <View style={{ height: 16 }} />
+            <View style={{ height: 20 }} />
           </ScrollView>
         </View>
       </View>
@@ -336,6 +372,7 @@ export default function VotersScreen() {
         voter={selected}
         response={selected ? responses[selected.id] : null}
         questions={activeSurvey?.questions || []}
+        activeSurveyId={activeSurvey?.id}
         onClose={() => setSelected(null)}
       />
     </View>
@@ -408,8 +445,9 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 12, color: theme.textSub, fontWeight: '600', flex: 1 },
   fieldValue: { fontSize: 13, color: theme.text, fontWeight: '600', flex: 2, textAlign: 'right' },
 
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
-  statusText:  { fontSize: 11, fontWeight: '700' },
+  statusBadge:  { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
+  statusText:   { fontSize: 11, fontWeight: '700' },
+  historyDate:  { fontSize: 11, fontWeight: '600', color: theme.textSub, marginBottom: 6, paddingLeft: 2 },
 
   errorBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
