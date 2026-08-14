@@ -66,14 +66,16 @@ const GENDER_COLOR = {
 // ── Voter detail bottom sheet ───────────────────────────────────────────────────
 function VoterDetailModal({ voter, response, questions, activeSurveyId, onClose }) {
   const insets = useSafeAreaInsets()
-  const [history,     setHistory]     = useState([])
-  const [histLoading, setHistLoading] = useState(false)
-  const [histError,   setHistError]   = useState(false)
+  const [history,      setHistory]      = useState([])
+  const [histLoading,  setHistLoading]  = useState(false)
+  const [histError,    setHistError]    = useState(false)
+  const [surveyQMaps,  setSurveyQMaps]  = useState({}) // surveyId → { qId: qText }
 
   // Fetch all historical responses for this voter from Supabase
   useEffect(() => {
     if (!voter?.id) return
     setHistory([])
+    setSurveyQMaps({})
     setHistLoading(true)
     setHistError(false)
     supabase
@@ -81,8 +83,24 @@ function VoterDetailModal({ voter, response, questions, activeSurveyId, onClose 
       .select('id, data, inserted_at')
       .filter('data->>voterId', 'eq', voter.id)
       .order('inserted_at', { ascending: false })
-      .then(({ data }) => {
-        setHistory((data || []).map(r => ({ ...r.data, _rowId: r.id, _at: r.inserted_at })))
+      .then(async ({ data }) => {
+        const entries = (data || []).map(r => ({ ...r.data, _rowId: r.id, _at: r.inserted_at }))
+        setHistory(entries)
+
+        // Fetch question text for each unique surveyId found in history
+        const surveyIds = [...new Set(entries.map(r => r.surveyId).filter(Boolean))]
+        if (surveyIds.length === 0) return
+        const { data: survRows } = await supabase
+          .from('surveys')
+          .select('id, data')
+          .in('id', surveyIds)
+        const maps = {}
+        ;(survRows || []).forEach(row => {
+          const qs = row.data?.questions || []
+          maps[row.id] = {}
+          qs.forEach(q => { maps[row.id][q.id] = q.text || q.label || q.question || q.id })
+        })
+        setSurveyQMaps(maps)
       })
       .catch(() => { setHistError(true) })
       .finally(() => setHistLoading(false))
@@ -214,7 +232,7 @@ function VoterDetailModal({ voter, response, questions, activeSurveyId, onClose 
                   <View key={r._rowId} style={{ marginBottom: 10 }}>
                     <Text style={styles.historyDate}>{formatDate(r.submittedAt || r._at)}</Text>
                     <View style={styles.fieldCard}>
-                      {renderAnswers(r.answers, {})}
+                      {renderAnswers(r.answers, surveyQMaps[r.surveyId] || {})}
                     </View>
                   </View>
                 ))}
