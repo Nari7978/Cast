@@ -6,16 +6,22 @@
     "orientation": "portrait",
     "scheme": "cast",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "android": {
       "package": "com.cast.mobile",
-      "versionCode": 2,
+      "versionCode": 3,
       "enableProguardInReleaseBuilds": true,
-      "enableShrinkResourcesInReleaseBuilds": true
+      "enableShrinkResourcesInReleaseBuilds": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1A0533"
+      }
     },
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cast.mobile"
+      "bundleIdentifier": "com.cast.mobile",
+      "icon": "./assets/icon.png"
     },
     "plugins": [
       "expo-router",
