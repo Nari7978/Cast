@@ -83,16 +83,18 @@ export const useStore = create((set, get) => ({
     })
   },
 
-  markSynced: async (voterId) => {
+  markSynced: async (localId) => {
     const { pendingResponses, responses } = get()
     const updated = pendingResponses.map(r =>
-      r.voterId === voterId ? { ...r, synced: true } : r
+      r.localId === localId ? { ...r, synced: true } : r
     )
     await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(updated))
+    // Update responses dict entry if it matches
+    const synced = updated.find(r => r.localId === localId)
     set({
       pendingResponses: updated,
-      responses: responses[voterId]
-        ? { ...responses, [voterId]: { ...responses[voterId], synced: true } }
+      responses: synced && responses[synced.voterId]
+        ? { ...responses, [synced.voterId]: { ...responses[synced.voterId], synced: true } }
         : responses,
     })
   },

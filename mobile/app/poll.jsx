@@ -38,13 +38,17 @@ export default function PollScreen() {
     return unsub
   }, [])
 
-  const optionCount  = activePoll?.options?.length || 0
-  const scaleAnims   = useRef(Array.from({ length: optionCount }, () => new Animated.Value(1))).current
-  const flashAnims   = useRef(Array.from({ length: optionCount }, () => new Animated.Value(0))).current
-  const floatOpacity = useRef(Array.from({ length: optionCount }, () => new Animated.Value(0))).current
-  const floatY       = useRef(Array.from({ length: optionCount }, () => new Animated.Value(0))).current
+  const scaleAnims   = useRef({})
+  const flashAnims   = useRef({})
+  const floatOpacity = useRef({})
+  const floatY       = useRef({})
   const [flashColor,  setFlashColor]  = useState({}) // idx → 'success' | 'error'
   const [floatLabel,  setFloatLabel]  = useState({}) // idx → label string
+
+  function getAnim(ref, idx, initVal) {
+    if (!ref.current[idx]) ref.current[idx] = new Animated.Value(initVal)
+    return ref.current[idx]
+  }
 
   useEffect(() => {
     if (!activePoll) return
@@ -72,24 +76,24 @@ export default function PollScreen() {
 
     // Card scale pop
     Animated.sequence([
-      Animated.timing(scaleAnims[idx], { toValue: 0.94, duration: 70, useNativeDriver: true }),
-      Animated.spring(scaleAnims[idx], { toValue: 1, friction: 3, useNativeDriver: true }),
+      Animated.timing(getAnim(scaleAnims, idx, 1), { toValue: 0.94, duration: 70, useNativeDriver: true }),
+      Animated.spring(getAnim(scaleAnims, idx, 1), { toValue: 1, friction: 3, useNativeDriver: true }),
     ]).start()
 
     // Green flash overlay: in → hold → out
     Animated.sequence([
-      Animated.timing(flashAnims[idx], { toValue: 1, duration: 60, useNativeDriver: true }),
-      Animated.timing(flashAnims[idx], { toValue: 0, duration: 550, useNativeDriver: true }),
+      Animated.timing(getAnim(flashAnims, idx, 0), { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(getAnim(flashAnims, idx, 0), { toValue: 0, duration: 550, useNativeDriver: true }),
     ]).start()
 
     // Floating "+1 ✓" rises up and fades
-    floatOpacity[idx].setValue(1)
-    floatY[idx].setValue(0)
+    getAnim(floatOpacity, idx, 0).setValue(1)
+    getAnim(floatY, idx, 0).setValue(0)
     Animated.parallel([
-      Animated.timing(floatY[idx],       { toValue: -52, duration: 700, useNativeDriver: true }),
+      Animated.timing(getAnim(floatY, idx, 0),       { toValue: -52, duration: 700, useNativeDriver: true }),
       Animated.sequence([
         Animated.delay(180),
-        Animated.timing(floatOpacity[idx], { toValue: 0, duration: 480, useNativeDriver: true }),
+        Animated.timing(getAnim(floatOpacity, idx, 0), { toValue: 0, duration: 480, useNativeDriver: true }),
       ]),
     ]).start()
   }
@@ -99,15 +103,15 @@ export default function PollScreen() {
 
     // Quick shake
     Animated.sequence([
-      Animated.timing(scaleAnims[idx], { toValue: 1.03, duration: 60, useNativeDriver: true }),
-      Animated.timing(scaleAnims[idx], { toValue: 0.97, duration: 60, useNativeDriver: true }),
-      Animated.spring(scaleAnims[idx], { toValue: 1, friction: 4, useNativeDriver: true }),
+      Animated.timing(getAnim(scaleAnims, idx, 1), { toValue: 1.03, duration: 60, useNativeDriver: true }),
+      Animated.timing(getAnim(scaleAnims, idx, 1), { toValue: 0.97, duration: 60, useNativeDriver: true }),
+      Animated.spring(getAnim(scaleAnims, idx, 1), { toValue: 1, friction: 4, useNativeDriver: true }),
     ]).start()
 
     // Red flash
     Animated.sequence([
-      Animated.timing(flashAnims[idx], { toValue: 1, duration: 60, useNativeDriver: true }),
-      Animated.timing(flashAnims[idx], { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(getAnim(flashAnims, idx, 0), { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(getAnim(flashAnims, idx, 0), { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start()
   }
 
@@ -128,18 +132,13 @@ export default function PollScreen() {
     const online = net.isConnected && net.isInternetReachable
 
     if (online) {
-      try {
-        await supabase.from('poll_responses').insert({
-          pollId:     record.pollId,
-          option:     record.option,
-          boothNo:    record.boothNo,
-          recordedAt: record.recordedAt,
-        })
-        // Online success — no need to queue
-      } catch (_) {
-        // Network call failed despite appearing online — save locally as fallback
-        await savePollResponse(record)
-      }
+      const { error } = await supabase.from('poll_responses').insert({
+        pollId:     record.pollId,
+        option:     record.option,
+        boothNo:    record.boothNo,
+        recordedAt: record.recordedAt,
+      })
+      if (error) await savePollResponse(record)
     } else {
       // Offline — queue for later sync
       await savePollResponse(record)
@@ -164,7 +163,7 @@ export default function PollScreen() {
   }
 
   const total      = Object.values(counts).reduce((s, n) => s + n, 0)
-  const boothTotal = voters?.length || 0
+  const boothTotal = agent?.voterCount || voters?.length || 0
   const options    = activePoll.options || []
 
   return (
@@ -220,8 +219,8 @@ export default function PollScreen() {
                   style={[
                     styles.floatBadge,
                     {
-                      opacity:   floatOpacity[idx],
-                      transform: [{ translateY: floatY[idx] }],
+                      opacity:   getAnim(floatOpacity, idx, 0),
+                      transform: [{ translateY: getAnim(floatY, idx, 0) }],
                       borderColor: color,
                     },
                   ]}
@@ -230,7 +229,7 @@ export default function PollScreen() {
                   <Text style={[styles.floatText, { color }]}>{floatLabel[idx] || '+1 Recorded'}</Text>
                 </Animated.View>
 
-                <Animated.View style={{ transform: [{ scale: scaleAnims[idx] }] }}>
+                <Animated.View style={{ transform: [{ scale: getAnim(scaleAnims, idx, 1) }] }}>
                   <TouchableOpacity
                     style={[styles.optionBtn, { borderColor: color, minHeight: imgUrl ? 100 : 72 }]}
                     onPress={() => handleTap(label, idx)}
@@ -245,7 +244,7 @@ export default function PollScreen() {
                         {
                           borderRadius: 14,
                           backgroundColor: isError ? '#EF444430' : color + '28',
-                          opacity: flashAnims[idx],
+                          opacity: getAnim(flashAnims, idx, 0),
                         },
                       ]}
                     />

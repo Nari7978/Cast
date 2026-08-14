@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Pressable, KeyboardAvoidingView, Platform,
+  TextInput, Pressable, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -258,6 +258,7 @@ export default function SurveyScreen() {
   const [answers,      setAnswers]       = useState(existing?.answers || {})
   const [submitted,    setSubmitted]     = useState(!!existing?.submittedAt)
   const [requiredErr,  setRequiredErr]   = useState(false)
+  const [submitting,   setSubmitting]    = useState(false)
 
   const question  = questions[currentIndex]
   const progress  = ((currentIndex + 1) / questions.length) * 100
@@ -274,7 +275,9 @@ export default function SurveyScreen() {
   }
 
   const handleSubmit = async () => {
+    if (submitting) return
     if (question?.required && !isAnswered(question, answers)) { setRequiredErr(true); return }
+    setSubmitting(true)
     const response = {
       localId:     uuid.v4(),
       voterId,
@@ -287,6 +290,7 @@ export default function SurveyScreen() {
     }
     await saveResponse(response)
     setSubmitted(true)
+    setSubmitting(false)
     syncPending().catch(() => {})
   }
 
@@ -430,9 +434,17 @@ export default function SurveyScreen() {
           </TouchableOpacity>
 
           {isLast ? (
-            <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} activeOpacity={0.85}>
-              <Ionicons name="checkmark-circle" size={18} color="#fff" />
-              <Text style={styles.submitBtnText}>Submit Survey</Text>
+            <TouchableOpacity
+              style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
+              onPress={handleSubmit}
+              activeOpacity={0.85}
+              disabled={submitting}
+            >
+              {submitting
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Ionicons name="checkmark-circle" size={18} color="#fff" />
+              }
+              <Text style={styles.submitBtnText}>{submitting ? 'Saving...' : 'Submit Survey'}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.nextNavBtn} onPress={goNext} activeOpacity={0.85}>

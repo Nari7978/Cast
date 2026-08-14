@@ -68,12 +68,14 @@ function VoterDetailModal({ voter, response, questions, activeSurveyId, onClose 
   const insets = useSafeAreaInsets()
   const [history,     setHistory]     = useState([])
   const [histLoading, setHistLoading] = useState(false)
+  const [histError,   setHistError]   = useState(false)
 
   // Fetch all historical responses for this voter from Supabase
   useEffect(() => {
     if (!voter?.id) return
     setHistory([])
     setHistLoading(true)
+    setHistError(false)
     supabase
       .from('responses')
       .select('id, data, inserted_at')
@@ -82,7 +84,7 @@ function VoterDetailModal({ voter, response, questions, activeSurveyId, onClose 
       .then(({ data }) => {
         setHistory((data || []).map(r => ({ ...r.data, _rowId: r.id, _at: r.inserted_at })))
       })
-      .catch(() => {})
+      .catch(() => { setHistError(true) })
       .finally(() => setHistLoading(false))
   }, [voter?.id])
 
@@ -116,7 +118,9 @@ function VoterDetailModal({ voter, response, questions, activeSurveyId, onClose 
   ;(questions || []).forEach(q => { qTextMap[q.id] = q.text || q.label || q.question || q.id })
 
   // Historical entries = everything from DB excluding current survey (to avoid dupe with local response)
-  const historicalEntries = history.filter(r => r.surveyId !== activeSurveyId && r.submittedAt)
+  const historicalEntries = activeSurveyId
+    ? history.filter(r => r.surveyId !== activeSurveyId && r.submittedAt)
+    : history.filter(r => r.submittedAt)
 
   function formatDate(iso) {
     if (!iso) return ''
@@ -199,6 +203,10 @@ function VoterDetailModal({ voter, response, questions, activeSurveyId, onClose 
             {/* Historical responses from previous surveys */}
             {histLoading ? (
               <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 20 }} />
+            ) : histError ? (
+              <Text style={{ fontSize: 12, color: theme.error, marginTop: 12, paddingLeft: 2 }}>
+                Could not load previous surveys. Please check your connection.
+              </Text>
             ) : historicalEntries.length > 0 ? (
               <>
                 <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Previous Surveys</Text>

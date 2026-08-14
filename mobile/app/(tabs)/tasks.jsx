@@ -86,8 +86,10 @@ export default function TasksScreen() {
   const [fetched,         setFetched]         = useState(false)
   const [loading,         setLoading]         = useState(true)
   const [refreshing,      setRefreshing]      = useState(false)
+  const [loadErr,         setLoadErr]         = useState(false)
 
   const load = useCallback(async (force = false) => {
+    setLoadErr(false)
     try {
       if (force) invalidateSurveyCache()
       const res = await fetchActiveSurveyData(agent?.boothNo)
@@ -96,7 +98,9 @@ export default function TasksScreen() {
       setLocalSurvey(res.activeSurvey || null)
       setActiveSurvey(res.activeSurvey)
       setActivePhase(res.activePhase)
-    } catch (_) {}
+    } catch (_) {
+      setLoadErr(true)
+    }
     setFetched(true)
     setLoading(false)
     setRefreshing(false)
@@ -132,6 +136,19 @@ export default function TasksScreen() {
         overScrollMode="never"
         showsVerticalScrollIndicator={false}
       >
+        {loadErr && (
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FEE2E2', borderRadius: 12, padding: 14, marginBottom: 16 }}
+            onPress={() => load(true)}
+          >
+            <Ionicons name="wifi-outline" size={18} color="#B91C1C" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#B91C1C' }}>Could not load tasks</Text>
+              <Text style={{ fontSize: 11, color: '#B91C1C', marginTop: 2 }}>Tap to retry</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {phases.length > 0 ? (
           phases.map(phase => (
             <PhaseCard

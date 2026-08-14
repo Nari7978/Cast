@@ -103,6 +103,7 @@ export default function Voters() {
   const [visibleCols,  setVisibleCols]  = useState(() => new Set(DEFAULT_HEADERS.filter(h => h !== 'ADDRESS')))
   const [showColPanel, setShowColPanel] = useState(false)
 
+  const [searchRaw,      setSearchRaw]      = useState('')
   const [search,         setSearch]         = useState('')
   const [filterStation,  setFilterStation]  = useState('')
   const [filterBooth,    setFilterBooth]    = useState('')
@@ -151,6 +152,12 @@ export default function Voters() {
     }).catch(() => setLoadStatus('idle'))
   }, [])
 
+  // ── Debounced search ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchRaw), 200)
+    return () => clearTimeout(t)
+  }, [searchRaw])
+
   // ── CSV file upload handler (append mode) ────────────────────────────────────
   const handleFileChange = useCallback(async e => {
     const file = e.target.files?.[0]
@@ -159,6 +166,7 @@ export default function Voters() {
 
     const importId = 'import_' + Date.now()
 
+    try {
     // 1. Parse CSV
     const text = await file.text()
     const { headers, voters: parsed } = parseCSV(text)
@@ -234,6 +242,10 @@ export default function Voters() {
       setCloudError(e => ({ ...e, [importId]: msg }))
       setCloudStatus(s => ({ ...s, [importId]: 'error' }))
     })
+    } catch (err) {
+      setCloudError(e => ({ ...e, [importId]: `Import failed: ${err?.message || err}` }))
+      setCloudStatus(s => ({ ...s, [importId]: 'error' }))
+    }
   }, [voters, importMetas])
 
   // ── Delete one import ────────────────────────────────────────────────────────
@@ -274,15 +286,15 @@ export default function Voters() {
     setImportMetas([])
     setLoadStatus('idle')
     setCloudStatus({})
-    setSearch(''); setFilterStation(''); setFilterBooth('')
+    setSearchRaw(''); setSearch(''); setFilterStation(''); setFilterBooth('')
     setPage(1)
     setConfirmDelete(null)
 
     clearFsCache('booths')
-    clearVoterCache().catch(() => {})
-    clearBooths().catch(() => {})
-    clearVoters().catch(() => {})
-    deleteImportMeta().catch(() => {})
+    clearVoterCache().catch(err => alert(`Cache clear failed: ${err?.message || err}`))
+    clearBooths().catch(err => alert(`Failed to clear booths from Supabase: ${err?.message || err}`))
+    clearVoters().catch(err => alert(`Failed to clear voters from Supabase: ${err?.message || err}`))
+    deleteImportMeta().catch(err => alert(`Failed to delete import metadata: ${err?.message || err}`))
   }, [])
 
   // ── Column detection from merged headers ─────────────────────────────────────
@@ -335,13 +347,37 @@ export default function Voters() {
     return [page - 2, page - 1, page, page + 1, page + 2]
   }, [page, totalPages])
 
+  const handleExportCSV = useCallback(() => {
+    if (filtered.length === 0) return
+    const headers = displayCols
+    const rows = filtered.map(voter =>
+      headers.map(h => {
+        const val = voter[h] ?? ''
+        const str = String(val)
+        return str.includes(',') || str.includes('"') || str.includes('\n')
+          ? `"${str.replace(/"/g, '""')}"`
+          : str
+      }).join(',')
+    )
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'voters_export.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, [filtered, displayCols])
+
   const handleSort = col => {
     setSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' })
     setPage(1)
   }
   const toggleCol    = col => setVisibleCols(prev => { const n = new Set(prev); n.has(col) ? (n.size > 1 && n.delete(col)) : n.add(col); return n })
-  const clearFilters = () => { setSearch(''); setFilterStation(''); setFilterBooth(''); setPage(1) }
-  const hasActiveFilters = search || filterStation || filterBooth
+  const clearFilters = () => { setSearchRaw(''); setSearch(''); setFilterStation(''); setFilterBooth(''); setPage(1) }
+  const hasActiveFilters = searchRaw || filterStation || filterBooth
 
   // Aggregate totals across all imports
   const totalVoters   = voters.length
@@ -363,7 +399,7 @@ export default function Voters() {
           <div className="flex items-center gap-2">
             {hasImports && (
               <>
-                <button className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[#E8ECF4] bg-white text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">
+                <button onClick={handleExportCSV} className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[#E8ECF4] bg-white text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">
                   <Download size={14} /> Export CSV
                 </button>
                 <button onClick={() => setShowColPanel(p => !p)}
@@ -523,13 +559,13 @@ export default function Voters() {
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="relative" style={{ minWidth: 260 }}>
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
+                  <input value={searchRaw} onChange={e => { setSearchRaw(e.target.value); setPage(1) }}
                     placeholder="Search by any field…"
                     className="w-full pl-9 pr-8 py-2 rounded-xl border border-[#E8ECF4] bg-white text-[13px] text-slate-700 placeholder-slate-400 outline-none"
                     onFocus={e => e.target.style.borderColor = '#5B5CEB'}
                     onBlur={e => e.target.style.borderColor = '#E8ECF4'} />
-                  {search && (
-                    <button onClick={() => { setSearch(''); setPage(1) }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  {searchRaw && (
+                    <button onClick={() => { setSearchRaw(''); setSearch(''); setPage(1) }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                       <X size={13} />
                     </button>
                   )}

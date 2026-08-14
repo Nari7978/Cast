@@ -39,8 +39,10 @@ export default function HomeScreen() {
   const hasData = dataLoadedAt > 0 || voters.length > 0
   const [loading,    setLoading]    = useState(!hasData)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadError,  setLoadError]  = useState(false)
 
   const load = useCallback(async (force = false) => {
+    setLoadError(false)
     try {
       if (force) invalidateSurveyCache()
       const { activeSurvey: s, activePhase: p } = await fetchActiveSurveyData(agent?.boothNo)
@@ -50,7 +52,9 @@ export default function HomeScreen() {
         const v = await fetchVotersForBooth(agent.boothNo)
         setVoters(v)
       }
-    } catch (_) {}
+    } catch (_) {
+      setLoadError(true)
+    }
     setLoading(false)
     setRefreshing(false)
   }, [agent?.boothNo])
@@ -139,6 +143,20 @@ export default function HomeScreen() {
       </LinearGradient>
 
       <View style={styles.body}>
+        {/* Error banner */}
+        {loadError && (
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FEE2E2', borderRadius: 12, padding: 14, marginBottom: 16 }}
+            onPress={() => load(true)}
+          >
+            <Ionicons name="wifi-outline" size={18} color="#B91C1C" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#B91C1C' }}>Could not load data</Text>
+              <Text style={{ fontSize: 11, color: '#B91C1C', marginTop: 2 }}>Tap to retry</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* KPI Row */}
         <Text style={styles.sectionTitle}>Survey Progress</Text>
         <View style={styles.kpiRow}>

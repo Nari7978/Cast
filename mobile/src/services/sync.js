@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore'
 
 let unsubscribe = null
 let syncing = false
+let pollSyncing = false
 
 // ── Survey data cache (5 min TTL) ─────────────────────────────────────────────
 let _surveyCache = null
@@ -99,13 +100,15 @@ export async function syncPending() {
         id:   response.localId,
         data: response,
       })
-      if (!error) await markSynced(response.voterId)
+      if (!error) await markSynced(response.localId)
     }
   } catch (_) {}
   syncing = false
 }
 
 export async function syncPendingPolls() {
+  if (pollSyncing) return
+  pollSyncing = true
   try {
     const { pendingPollResponses, markPollSynced } = useStore.getState()
     const unsynced = pendingPollResponses.filter(r => !r.synced)
@@ -119,6 +122,7 @@ export async function syncPendingPolls() {
       if (!error) await markPollSynced(r.localId)
     }
   } catch (_) {}
+  pollSyncing = false
 }
 
 export async function fetchActiveSurveyData(boothNo) {

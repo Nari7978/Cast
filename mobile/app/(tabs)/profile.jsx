@@ -26,9 +26,9 @@ function MenuItem({ icon, label, onPress, danger = false, rightText }) {
 
 export default function ProfileScreen() {
   const insets  = useSafeAreaInsets()
-  const { agent, logout, responses } = useStore()
+  const { agent, logout, responses, pendingResponses } = useStore()
 
-  const pending = Object.values(responses).filter(r => !r.synced).length
+  const pending = pendingResponses.filter(r => !r.synced).length
   const total   = Object.values(responses).filter(r => r.submittedAt).length
 
   const confirmLogout = () => {
