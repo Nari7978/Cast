@@ -72,6 +72,16 @@ export function startRealtimeSync(boothNo) {
       }).catch(() => {})
     })
 
+    // Assignment created/changed by admin (new survey assigned to this booth)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, () => {
+      invalidateSurveyCache()
+      fetchActiveSurveyData(boothNo).then(res => {
+        const { setActiveSurvey, setActivePhase } = useStore.getState()
+        setActiveSurvey(res.activeSurvey)
+        setActivePhase(res.activePhase)
+      }).catch(() => {})
+    })
+
     // Voters added/updated for this booth
     .on('postgres_changes', {
       event: '*', schema: 'public', table: 'voters',

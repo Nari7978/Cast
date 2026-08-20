@@ -389,7 +389,7 @@ export default function Phases() {
               {/* ── Metrics ── */}
               <div className="px-5 py-4 grid grid-cols-2 gap-3 border-b border-[#E8ECF4]">
                 {[
-                  { label: 'Planned Booths',         value: (drawerPhase.agentsAssigned || 0).toLocaleString(), icon: MapPin,    color: '#5B5CEB', bg: '#EEF2FF' },
+                  { label: 'Assigned Booths',         value: (drawerPhase.booths || 0).toLocaleString(),         icon: MapPin,    color: '#5B5CEB', bg: '#EEF2FF' },
                   { label: 'Booth Agents',            value: (drawerPhase.agentsAssigned || 0).toLocaleString(), icon: Users,     color: '#10B981', bg: '#ECFDF5' },
                   { label: 'Survey Forms',            value: (drawerPhase.surveyForms || []).length,              icon: FileText,  color: '#8B5CF6', bg: '#F5F3FF' },
                   { label: 'Responses Collected',     value: (drawerPhase.responses || 0).toLocaleString(),      icon: BarChart2, color: '#F59E0B', bg: '#FFFBEB' },
@@ -485,8 +485,8 @@ export default function Phases() {
                       <MapPin size={14} style={{ color: '#5B5CEB' }} />
                     </div>
                     <div>
-                      <p className="text-slate-700 font-semibold text-[13px]">{(drawerPhase.agentsAssigned || 0).toLocaleString()} Booths Planned</p>
-                      <p className="text-slate-400 text-[11px]">{drawerPhase.booths || 0} booths with responses</p>
+                      <p className="text-slate-700 font-semibold text-[13px]">{(drawerPhase.booths || 0).toLocaleString()} Booths Assigned</p>
+                      <p className="text-slate-400 text-[11px]">{drawerPhase.responses || 0} responses collected</p>
                     </div>
                   </div>
                   <ArrowRight size={14} className="text-slate-300" />

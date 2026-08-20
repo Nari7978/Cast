@@ -5,29 +5,33 @@ const COL = 'phases'
 const toDoc = row => ({ id: row.id, _createdAt: row.inserted_at, ...row.data })
 
 async function fetchAll() {
-  const [{ data, error }, { data: respData }] = await Promise.all([
+  const [{ data, error }, { data: respData }, { data: assignData }] = await Promise.all([
     supabase.from(COL).select('*').order('inserted_at', { ascending: false }),
     supabase.from('responses').select('id, data'),
+    supabase.from('assignments').select('id, data'),
   ])
   if (error) throw error
 
-  // Count responses and unique booths per phaseId
+  // Count responses per phaseId
   const respCountMap = {}
-  const boothSetMap  = {}
   ;(respData || []).forEach(r => {
     const pid = r.data?.phaseId
     if (!pid) return
     respCountMap[pid] = (respCountMap[pid] || 0) + 1
-    if (r.data?.boothNo) {
-      if (!boothSetMap[pid]) boothSetMap[pid] = new Set()
-      boothSetMap[pid].add(String(r.data.boothNo))
-    }
+  })
+
+  // Count assigned booths per phaseId from assignments table
+  const boothCountMap = {}
+  ;(assignData || []).forEach(a => {
+    const pid = a.data?.phaseId
+    if (!pid) return
+    boothCountMap[pid] = (boothCountMap[pid] || 0) + (a.data?.boothCount || 0)
   })
 
   return data.map(row => ({
     ...toDoc(row),
     responses: respCountMap[row.id] || 0,
-    booths:    boothSetMap[row.id]?.size || 0,
+    booths:    boothCountMap[row.id] || 0,
   }))
 }
 
@@ -37,10 +41,12 @@ export function subscribePhases(cb, onError) {
 
   fetchAll().then(docs => { writeCache(COL, docs); cb(docs) }).catch(onError)
 
+  const refresh = () => fetchAll().then(docs => { writeCache(COL, docs); cb(docs) }).catch(onError)
+
   const channel = supabase.channel(`${COL}_rt`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: COL }, () => {
-      fetchAll().then(docs => { writeCache(COL, docs); cb(docs) }).catch(onError)
-    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: COL }, refresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, refresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'responses' }, refresh)
     .subscribe()
 
   return () => supabase.removeChannel(channel)
