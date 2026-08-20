@@ -226,7 +226,7 @@ export default function Phases() {
               ) : filtered.map(phase => {
                 const sc = STATUS_CONFIG[phase.status] || STATUS_CONFIG.Draft
                 const StatusIcon = sc.icon
-                const pct = phase.booths > 0 ? Math.round(phase.completedBooths / phase.booths * 100) : 0
+                const pct = phase.booths > 0 ? Math.round((phase.completedBooths || 0) / phase.booths * 100) : 0
                 return (
                   <tr
                     key={phase.id}
@@ -343,10 +343,10 @@ export default function Phases() {
               {/* ── Metrics ── */}
               <div className="px-5 py-4 grid grid-cols-2 gap-3 border-b border-[#E8ECF4]">
                 {[
-                  { label: 'Assigned Booths',       value: drawerPhase.booths.toLocaleString(),           icon: MapPin,        color: '#5B5CEB', bg: '#EEF2FF' },
-                  { label: 'Booth Agents',           value: drawerPhase.agentsAssigned.toLocaleString(),  icon: Users,         color: '#10B981', bg: '#ECFDF5' },
-                  { label: 'Survey Forms',           value: drawerPhase.surveyForms.length,               icon: FileText,      color: '#8B5CF6', bg: '#F5F3FF' },
-                  { label: 'Responses Collected',    value: drawerPhase.responses.toLocaleString(),       icon: BarChart2,     color: '#F59E0B', bg: '#FFFBEB' },
+                  { label: 'Assigned Booths',       value: (drawerPhase.booths || 0).toLocaleString(),           icon: MapPin,        color: '#5B5CEB', bg: '#EEF2FF' },
+                  { label: 'Booth Agents',           value: (drawerPhase.agentsAssigned || 0).toLocaleString(),  icon: Users,         color: '#10B981', bg: '#ECFDF5' },
+                  { label: 'Survey Forms',           value: (drawerPhase.surveyForms || []).length,               icon: FileText,      color: '#8B5CF6', bg: '#F5F3FF' },
+                  { label: 'Responses Collected',    value: (drawerPhase.responses || 0).toLocaleString(),       icon: BarChart2,     color: '#F59E0B', bg: '#FFFBEB' },
                 ].map(({ label, value, icon: Icon, color, bg }) => (
                   <div key={label} className="rounded-xl border border-[#E8ECF4] p-3 flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
@@ -365,9 +365,9 @@ export default function Phases() {
                 <p className="text-slate-700 font-semibold text-[13px] mb-3">Survey Progress</p>
                 <div className="space-y-2 mb-3">
                   {[
-                    { label: 'Assigned Booths',   value: drawerPhase.booths,           color: '#5B5CEB' },
-                    { label: 'Completed Booths',  value: drawerPhase.completedBooths,  color: '#10B981' },
-                    { label: 'Pending Booths',    value: drawerPhase.pendingBooths,    color: '#F59E0B' },
+                    { label: 'Assigned Booths',   value: drawerPhase.booths || 0,           color: '#5B5CEB' },
+                    { label: 'Completed Booths',  value: drawerPhase.completedBooths || 0,  color: '#10B981' },
+                    { label: 'Pending Booths',    value: drawerPhase.pendingBooths || 0,    color: '#F59E0B' },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -383,11 +383,11 @@ export default function Phases() {
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-slate-400 text-[11px]">Completion</span>
                       <span className="text-[12px] font-bold" style={{ color: drawerPhase.color }}>
-                        {Math.round(drawerPhase.completedBooths / drawerPhase.booths * 100)}%
+                        {Math.round((drawerPhase.completedBooths || 0) / drawerPhase.booths * 100)}%
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.round(drawerPhase.completedBooths / drawerPhase.booths * 100)}%`, background: drawerPhase.color }} />
+                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.round((drawerPhase.completedBooths || 0) / drawerPhase.booths * 100)}%`, background: drawerPhase.color }} />
                     </div>
                   </div>
                 )}
