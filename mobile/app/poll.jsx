@@ -42,8 +42,16 @@ export default function PollScreen() {
   const flashAnims   = useRef({})
   const floatOpacity = useRef({})
   const floatY       = useRef({})
-  const [flashColor,  setFlashColor]  = useState({}) // idx → 'success' | 'error'
-  const [floatLabel,  setFloatLabel]  = useState({}) // idx → label string
+  const imgFadeAnims = useRef({})
+  const [flashColor,  setFlashColor]  = useState({})
+  const [floatLabel,  setFloatLabel]  = useState({})
+
+  // Prefetch all option images as soon as the poll is known
+  useEffect(() => {
+    if (!activePoll?.optionImages) return
+    const urls = Object.values(activePoll.optionImages).filter(Boolean)
+    urls.forEach(url => Image.prefetch(url).catch(() => {}))
+  }, [activePoll?.id])
 
   function getAnim(ref, idx, initVal) {
     if (!ref.current[idx]) ref.current[idx] = new Animated.Value(initVal)
@@ -251,10 +259,21 @@ export default function PollScreen() {
 
                     <View style={[styles.optionContent, imgUrl && { paddingVertical: 14 }]}>
                       {imgUrl ? (
-                        <Image
-                          source={{ uri: imgUrl }}
-                          style={[styles.candidatePhoto, { borderColor: color }]}
-                        />
+                        <View style={[styles.candidatePhoto, { borderColor: color, overflow: 'hidden', backgroundColor: color + '22' }]}>
+                          <Animated.Image
+                            source={{ uri: imgUrl }}
+                            style={[StyleSheet.absoluteFill, {
+                              opacity: (() => {
+                                if (!imgFadeAnims.current[label]) imgFadeAnims.current[label] = new Animated.Value(0)
+                                return imgFadeAnims.current[label]
+                              })(),
+                            }]}
+                            onLoad={() => {
+                              if (!imgFadeAnims.current[label]) imgFadeAnims.current[label] = new Animated.Value(0)
+                              Animated.timing(imgFadeAnims.current[label], { toValue: 1, duration: 220, useNativeDriver: true }).start()
+                            }}
+                          />
+                        </View>
                       ) : (
                         <View style={[styles.optionDot, { backgroundColor: color }]} />
                       )}
