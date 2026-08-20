@@ -116,6 +116,20 @@ export async function syncPending() {
   syncing = false
 }
 
+// Remove local responses that were deleted from the server (e.g. admin deleted a survey)
+export async function reconcileResponses() {
+  const { pendingResponses, removeResponses } = useStore.getState()
+  const synced = pendingResponses.filter(r => r.synced && r.localId)
+  if (synced.length === 0) return
+  try {
+    const ids = synced.map(r => r.localId)
+    const { data } = await supabase.from('responses').select('id').in('id', ids)
+    const existing = new Set((data || []).map(r => r.id))
+    const deletedIds = ids.filter(id => !existing.has(id))
+    if (deletedIds.length > 0) await removeResponses(deletedIds)
+  } catch (_) {}
+}
+
 export async function syncPendingPolls() {
   if (pollSyncing) return
   pollSyncing = true

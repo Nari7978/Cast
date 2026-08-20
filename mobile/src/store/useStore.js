@@ -89,7 +89,6 @@ export const useStore = create((set, get) => ({
       r.localId === localId ? { ...r, synced: true } : r
     )
     await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(updated))
-    // Update responses dict entry if it matches
     const synced = updated.find(r => r.localId === localId)
     set({
       pendingResponses: updated,
@@ -97,6 +96,20 @@ export const useStore = create((set, get) => ({
         ? { ...responses, [synced.voterId]: { ...responses[synced.voterId], synced: true } }
         : responses,
     })
+  },
+
+  // Remove responses that were deleted server-side
+  removeResponses: async (localIds) => {
+    const { pendingResponses, activeSurvey } = get()
+    const idSet = new Set(localIds)
+    const updated = pendingResponses.filter(r => !idSet.has(r.localId))
+    await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(updated))
+    const surveyId = activeSurvey?.id
+    const newResponses = {}
+    updated
+      .filter(r => !surveyId || r.surveyId === surveyId)
+      .forEach(r => { newResponses[r.voterId] = r })
+    set({ pendingResponses: updated, responses: newResponses })
   },
 
   getResponseStatus: (voterId) => {
