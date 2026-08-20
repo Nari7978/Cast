@@ -411,7 +411,7 @@ export default function Phases() {
                           <ClipboardList size={14} style={{ color: '#5B5CEB' }} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-slate-700 font-semibold text-[13px]">{String(fid)}</p>
+                          <p className="text-slate-700 font-semibold text-[13px]">{surveys.find(s => s.id === fid)?.name || String(fid)}</p>
                         </div>
                       </div>
                     ))}
