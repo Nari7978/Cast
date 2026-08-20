@@ -6,7 +6,7 @@ import {
   Calendar, FileText, Target, AlertCircle, Loader2,
 } from 'lucide-react'
 
-import { subscribePhases } from '../services/phaseService'
+import { subscribePhases, updatePhase } from '../services/phaseService'
 import { subscribeSurveyForms } from '../services/surveyService'
 import { subscribeAssignments, createAssignment, deleteAssignment as deleteAssignmentSvc } from '../services/assignmentService'
 import { fetchAllBooths } from '../services/voterService'
@@ -126,7 +126,7 @@ function CreateWizard({ onClose, onSave, defaultPhaseId, phases, surveyForms, bo
     setSaving(true)
     setSaveError('')
     try {
-      await onSave({ name, phaseId, formId, boothRange: 'Custom', boothCount: selBooths.size, agentCount: selBooths.size, status: 'Active', notes: '' })
+      await onSave({ name, phaseId, formId, boothRange: 'Custom', boothNos: [...selBooths], boothCount: selBooths.size, agentCount: selBooths.size, status: 'Active', notes: '' })
       onClose()
     } catch (e) {
       setSaveError('Failed to save. Check your connection and try again.')
@@ -414,8 +414,24 @@ export default function AssignSurveys() {
     return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
   }, [booths])
 
-  async function saveAssignment(a) { await createAssignment(a) }
-  async function handleDelete(id) { await deleteAssignmentSvc(id); if (drawer?.id === id) setDrawer(null) }
+  async function saveAssignment(a) {
+    await createAssignment(a)
+    // Recompute agentsAssigned for this phase from all assignments + new one
+    const phaseAssigns = assignments.filter(x => x.phaseId === a.phaseId)
+    const totalAgents = phaseAssigns.reduce((s, x) => s + (x.agentCount || 0), 0) + (a.agentCount || 0)
+    await updatePhase(a.phaseId, { agentsAssigned: totalAgents })
+  }
+
+  async function handleDelete(id) {
+    const deleted = assignments.find(a => a.id === id)
+    await deleteAssignmentSvc(id)
+    if (drawer?.id === id) setDrawer(null)
+    if (deleted?.phaseId) {
+      const remaining = assignments.filter(x => x.id !== id && x.phaseId === deleted.phaseId)
+      const totalAgents = remaining.reduce((s, x) => s + (x.agentCount || 0), 0)
+      await updatePhase(deleted.phaseId, { agentsAssigned: totalAgents })
+    }
+  }
 
   return (
     <div className="-m-6 flex flex-col bg-[#F5F7FB]" style={{ minHeight: 'calc(100vh - 64px)' }}>

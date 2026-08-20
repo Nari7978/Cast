@@ -367,7 +367,7 @@ export default function Responses() {
             style={{ borderColor: '#E2E8F0', color: '#334155' }}
           >
             <FileText size={15} style={{ color: '#5B5CEB' }} />
-            Export CSV
+            {hasFilters ? `Export Filtered (${filtered.length})` : 'Export CSV'}
           </button>
           <button
             onClick={handleExportAll}

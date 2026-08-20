@@ -82,6 +82,16 @@ export function startRealtimeSync(boothNo) {
       }).catch(() => {})
     })
 
+    // Assignment created/changed by admin (new survey deployed to booths)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, () => {
+      invalidateSurveyCache()
+      fetchActiveSurveyData(boothNo).then(res => {
+        const { setActiveSurvey, setActivePhase } = useStore.getState()
+        setActiveSurvey(res.activeSurvey)
+        setActivePhase(res.activePhase)
+      }).catch(() => {})
+    })
+
     // Voting Day Poll activated/changed by admin
     .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, () => {
       fetchActivePoll(boothNo).then(poll => {
@@ -154,18 +164,39 @@ export async function fetchActiveSurveyData(boothNo) {
     return _surveyCache
   }
 
-  const [surveysRes, phasesRes] = await Promise.all([
+  const [surveysRes, phasesRes, assignmentsRes] = await Promise.all([
     supabase.from('surveys').select('*').order('inserted_at', { ascending: false }),
     supabase.from('phases').select('*').order('inserted_at', { ascending: false }),
+    supabase.from('assignments').select('*').order('inserted_at', { ascending: false }),
   ])
 
-  const surveys = (surveysRes.data || []).map(r => ({ id: r.id, ...r.data }))
-  const phases  = (phasesRes.data  || []).map(r => ({ id: r.id, ...r.data }))
+  const surveys     = (surveysRes.data     || []).map(r => ({ id: r.id, ...r.data }))
+  const phases      = (phasesRes.data      || []).map(r => ({ id: r.id, ...r.data }))
+  const assignments = (assignmentsRes.data || []).map(r => ({ id: r.id, ...r.data }))
 
-  const activePhase  = phases.find(p => p.status === 'Active') || phases[0] || null
-  const activeSurvey = activePhase
-    ? surveys.find(s => s.id === activePhase.surveyId) || surveys[0] || null
-    : surveys[0] || null
+  const activePhase = phases.find(p => p.status === 'Active') || phases[0] || null
+
+  let activeSurvey = null
+  if (activePhase && boothNo) {
+    // Precise: find an Active assignment for this phase that covers this booth
+    const assignment = assignments.find(a =>
+      a.phaseId === activePhase.id &&
+      a.status === 'Active' &&
+      Array.isArray(a.boothNos) &&
+      a.boothNos.includes(String(boothNo))
+    )
+    if (assignment?.formId) {
+      activeSurvey = surveys.find(s => s.id === assignment.formId) || null
+    }
+  }
+  // Fallback chain: phase.surveyId → first surveyForm → first survey
+  if (!activeSurvey && activePhase) {
+    activeSurvey =
+      surveys.find(s => s.id === activePhase.surveyId) ||
+      (activePhase.surveyForms?.length ? surveys.find(s => s.id === activePhase.surveyForms[0]) : null) ||
+      surveys[0] || null
+  }
+  if (!activeSurvey) activeSurvey = surveys[0] || null
 
   _surveyCache = { activeSurvey, activePhase, phases, surveys }
   _surveyCacheAt = Date.now()

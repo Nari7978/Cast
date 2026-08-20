@@ -5,11 +5,12 @@ import {
   Calendar, Users, ClipboardList, BarChart2,
   CheckCircle2, Clock, AlertCircle, Circle,
   ArrowRight, MapPin, FileText, Trash2,
-  Target, TrendingUp, Activity, Layers,
+  Target, TrendingUp, Activity, Layers, Loader2,
 } from 'lucide-react'
 
 import { subscribePhases, createPhase, updatePhase, deletePhase } from '../services/phaseService'
 import { subscribeSurveyForms } from '../services/surveyService'
+import { fetchAllBooths } from '../services/voterService'
 
 const STATUS_CONFIG = {
   Active:    { color: '#10B981', bg: '#ECFDF5', icon: Activity,      label: 'Active'    },
@@ -53,7 +54,14 @@ export default function Phases() {
   const [formErrors, setFormErrors]     = useState({})
   const [showBoothDialog, setShowBoothDialog] = useState(false)
   const [boothSearch, setBoothSearch]         = useState('')
-  const [confirmDelete, setConfirmDelete]     = useState(null)  // phase to delete
+  const [confirmDelete, setConfirmDelete]     = useState(null)
+  // Booth assignment dialog state
+  const [allBooths, setAllBooths]               = useState([])
+  const [boothsLoading, setBoothsLoading]       = useState(false)
+  const [selectedBoothIds, setSelectedBoothIds] = useState(new Set())
+  // Add Form dialog state
+  const [showAddFormDialog, setShowAddFormDialog]   = useState(false)
+  const [addFormSelections, setAddFormSelections]   = useState(new Set())
 
   useEffect(() => subscribePhases(data => setPhases(data)), [])
   useEffect(() => subscribeSurveyForms(data => setSurveys(data), () => {}), [])
@@ -122,6 +130,44 @@ export default function Phases() {
     setConfirmDelete(null)
     if (drawerPhase?.id === phase.id) setDrawerPhase(null)
   }
+
+  // ── open booth dialog with real data ────
+  function openBoothDialog() {
+    setSelectedBoothIds(new Set(drawerPhase.assignedBoothNos || []))
+    setBoothSearch('')
+    setShowBoothDialog(true)
+    setBoothsLoading(true)
+    fetchAllBooths()
+      .then(data => { setAllBooths(data); setBoothsLoading(false) })
+      .catch(() => setBoothsLoading(false))
+  }
+
+  async function saveBoothAssignment() {
+    const boothNos = [...selectedBoothIds]
+    await updatePhase(drawerPhase.id, { assignedBoothNos: boothNos, agentsAssigned: boothNos.length })
+    setShowBoothDialog(false)
+  }
+
+  // ── Add Form dialog ────
+  function openAddFormDialog() {
+    setAddFormSelections(new Set(drawerPhase.surveyForms || []))
+    setShowAddFormDialog(true)
+  }
+
+  async function saveAddedForms() {
+    await updatePhase(drawerPhase.id, { surveyForms: [...addFormSelections] })
+    setShowAddFormDialog(false)
+  }
+
+  // ── filtered booths in dialog ────
+  const filteredBoothList = useMemo(() => {
+    if (!boothSearch) return allBooths
+    const q = boothSearch.toLowerCase()
+    return allBooths.filter(b =>
+      String(b.boothNo).includes(q) ||
+      (b.pollingStation || '').toLowerCase().includes(q)
+    )
+  }, [allBooths, boothSearch])
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -343,10 +389,10 @@ export default function Phases() {
               {/* ── Metrics ── */}
               <div className="px-5 py-4 grid grid-cols-2 gap-3 border-b border-[#E8ECF4]">
                 {[
-                  { label: 'Assigned Booths',       value: (drawerPhase.booths || 0).toLocaleString(),           icon: MapPin,        color: '#5B5CEB', bg: '#EEF2FF' },
-                  { label: 'Booth Agents',           value: (drawerPhase.agentsAssigned || 0).toLocaleString(),  icon: Users,         color: '#10B981', bg: '#ECFDF5' },
-                  { label: 'Survey Forms',           value: (drawerPhase.surveyForms || []).length,               icon: FileText,      color: '#8B5CF6', bg: '#F5F3FF' },
-                  { label: 'Responses Collected',    value: (drawerPhase.responses || 0).toLocaleString(),       icon: BarChart2,     color: '#F59E0B', bg: '#FFFBEB' },
+                  { label: 'Planned Booths',         value: (drawerPhase.agentsAssigned || 0).toLocaleString(), icon: MapPin,    color: '#5B5CEB', bg: '#EEF2FF' },
+                  { label: 'Booth Agents',            value: (drawerPhase.agentsAssigned || 0).toLocaleString(), icon: Users,     color: '#10B981', bg: '#ECFDF5' },
+                  { label: 'Survey Forms',            value: (drawerPhase.surveyForms || []).length,              icon: FileText,  color: '#8B5CF6', bg: '#F5F3FF' },
+                  { label: 'Responses Collected',     value: (drawerPhase.responses || 0).toLocaleString(),      icon: BarChart2, color: '#F59E0B', bg: '#FFFBEB' },
                 ].map(({ label, value, icon: Icon, color, bg }) => (
                   <div key={label} className="rounded-xl border border-[#E8ECF4] p-3 flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
@@ -397,7 +443,10 @@ export default function Phases() {
               <div className="px-5 py-4 border-b border-[#E8ECF4]">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-slate-700 font-semibold text-[13px]">Survey Forms</p>
-                  <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium border border-[#E8ECF4] text-slate-500 hover:bg-slate-50 transition-colors">
+                  <button
+                    onClick={openAddFormDialog}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium border border-[#E8ECF4] text-slate-500 hover:bg-slate-50 transition-colors"
+                  >
                     <Plus size={12} /> Add Form
                   </button>
                 </div>
@@ -424,7 +473,7 @@ export default function Phases() {
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-slate-700 font-semibold text-[13px]">Booth Assignment</p>
                   <button
-                    onClick={() => setShowBoothDialog(true)}
+                    onClick={openBoothDialog}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium border border-[#E8ECF4] text-slate-500 hover:bg-slate-50 transition-colors"
                   >
                     <MapPin size={12} /> Manage Booths
@@ -436,8 +485,8 @@ export default function Phases() {
                       <MapPin size={14} style={{ color: '#5B5CEB' }} />
                     </div>
                     <div>
-                      <p className="text-slate-700 font-semibold text-[13px]">{drawerPhase.booths.toLocaleString()} Booths Assigned</p>
-                      <p className="text-slate-400 text-[11px]">{drawerPhase.agentsAssigned} agents active</p>
+                      <p className="text-slate-700 font-semibold text-[13px]">{(drawerPhase.agentsAssigned || 0).toLocaleString()} Booths Planned</p>
+                      <p className="text-slate-400 text-[11px]">{drawerPhase.booths || 0} booths with responses</p>
                     </div>
                   </div>
                   <ArrowRight size={14} className="text-slate-300" />
@@ -510,7 +559,10 @@ export default function Phases() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)' }}>
           <div className="bg-white rounded-2xl border border-[#E8ECF4] w-[500px] max-h-[80vh] flex flex-col" style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
             <div className="px-5 py-4 border-b border-[#E8ECF4] flex items-center justify-between flex-shrink-0">
-              <p className="text-slate-800 font-bold text-[15px]">Manage Booth Assignments</p>
+              <div>
+                <p className="text-slate-800 font-bold text-[15px]">Manage Booth Assignments</p>
+                <p className="text-slate-400 text-[12px] mt-0.5">{selectedBoothIds.size} booth{selectedBoothIds.size !== 1 ? 's' : ''} selected</p>
+              </div>
               <button onClick={() => setShowBoothDialog(false)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"><X size={15} /></button>
             </div>
             <div className="px-5 py-4 border-b border-[#E8ECF4] flex-shrink-0">
@@ -519,7 +571,7 @@ export default function Phases() {
                 <input
                   value={boothSearch}
                   onChange={e => setBoothSearch(e.target.value)}
-                  placeholder="Search booth..."
+                  placeholder="Search booth or station..."
                   className="w-full pl-9 pr-4 py-2 rounded-xl border border-[#E8ECF4] text-[13px] text-slate-700 placeholder-slate-400 outline-none"
                   onFocus={e => e.target.style.borderColor = '#5B5CEB'}
                   onBlur={e => e.target.style.borderColor = '#E8ECF4'}
@@ -527,19 +579,32 @@ export default function Phases() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1">
-              {/* Mock booth list */}
-              {Array.from({ length: 12 }, (_, i) => {
-                const num = String(i + 1).padStart(3, '0')
-                const stations = ['Rishikesh', 'Haridwar', 'Dehradun North', 'Dehradun South']
-                const st = stations[i % stations.length]
-                const label = `Booth ${num} — ${st}`
-                if (boothSearch && !label.toLowerCase().includes(boothSearch.toLowerCase())) return null
+              {boothsLoading ? (
+                <div className="flex items-center justify-center gap-2 py-10 text-slate-400">
+                  <Loader2 size={16} className="animate-spin" style={{ color: '#5B5CEB' }} />
+                  <span className="text-[13px]">Loading booths…</span>
+                </div>
+              ) : allBooths.length === 0 ? (
+                <p className="text-center text-slate-400 text-[12px] py-10">No booths found. Import voters first.</p>
+              ) : filteredBoothList.length === 0 ? (
+                <p className="text-center text-slate-400 text-[12px] py-10">No booths match your search.</p>
+              ) : filteredBoothList.map(b => {
+                const id = String(b.boothNo)
                 return (
-                  <label key={num} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
-                    <input type="checkbox" defaultChecked={i < 8} className="w-4 h-4 rounded accent-indigo-500" />
+                  <label key={id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={selectedBoothIds.has(id)}
+                      onChange={() => setSelectedBoothIds(prev => {
+                        const n = new Set(prev)
+                        n.has(id) ? n.delete(id) : n.add(id)
+                        return n
+                      })}
+                      className="w-4 h-4 rounded accent-indigo-500"
+                    />
                     <div>
-                      <p className="text-slate-700 text-[13px] font-medium">Booth {num}</p>
-                      <p className="text-slate-400 text-[11px]">{st}</p>
+                      <p className="text-slate-700 text-[13px] font-medium">Booth {b.boothNo}</p>
+                      <p className="text-slate-400 text-[11px]">{b.pollingStation || '—'}</p>
                     </div>
                   </label>
                 )
@@ -547,7 +612,50 @@ export default function Phases() {
             </div>
             <div className="px-5 py-4 border-t border-[#E8ECF4] flex gap-2 flex-shrink-0">
               <button onClick={() => setShowBoothDialog(false)} className="flex-1 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">Cancel</button>
-              <button onClick={() => setShowBoothDialog(false)} className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity" style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)' }}>Save Assignment</button>
+              <button onClick={saveBoothAssignment} className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity" style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)' }}>
+                Save Assignment ({selectedBoothIds.size})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────── Add Form Dialog ─────────────────── */}
+      {showAddFormDialog && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)' }}>
+          <div className="bg-white rounded-2xl border border-[#E8ECF4] w-[460px] max-h-[70vh] flex flex-col" style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+            <div className="px-5 py-4 border-b border-[#E8ECF4] flex items-center justify-between flex-shrink-0">
+              <p className="text-slate-800 font-bold text-[15px]">Link Survey Forms</p>
+              <button onClick={() => setShowAddFormDialog(false)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"><X size={15} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+              {surveys.length === 0 ? (
+                <p className="text-slate-400 text-[12px] py-4 text-center">No survey forms available. Create one in the Surveys page.</p>
+              ) : surveys.map(s => (
+                <label key={s.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${addFormSelections.has(s.id) ? 'border-[#5B5CEB] bg-[#EEF2FF]' : 'border-[#E8ECF4] hover:border-slate-300'}`}>
+                  <input
+                    type="checkbox"
+                    checked={addFormSelections.has(s.id)}
+                    onChange={() => setAddFormSelections(prev => {
+                      const n = new Set(prev)
+                      n.has(s.id) ? n.delete(s.id) : n.add(s.id)
+                      return n
+                    })}
+                    className="accent-[#5B5CEB] w-4 h-4"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-slate-700 font-semibold text-[13px]">{s.name}</p>
+                    {s.description && <p className="text-slate-400 text-[11px] truncate">{s.description}</p>}
+                  </div>
+                  {addFormSelections.has(s.id) && <CheckCircle2 size={15} style={{ color: '#5B5CEB' }} />}
+                </label>
+              ))}
+            </div>
+            <div className="px-5 py-4 border-t border-[#E8ECF4] flex gap-2 flex-shrink-0">
+              <button onClick={() => setShowAddFormDialog(false)} className="flex-1 py-2.5 rounded-xl border border-[#E8ECF4] text-slate-600 text-[13px] font-medium hover:bg-slate-50 transition-colors">Cancel</button>
+              <button onClick={saveAddedForms} className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity" style={{ background: 'linear-gradient(135deg, #5B5CEB, #818CF8)' }}>
+                Save ({addFormSelections.size} form{addFormSelections.size !== 1 ? 's' : ''})
+              </button>
             </div>
           </div>
         </div>
