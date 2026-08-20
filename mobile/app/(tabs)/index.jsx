@@ -45,13 +45,13 @@ export default function HomeScreen() {
     setLoadError(false)
     try {
       if (force) invalidateSurveyCache()
-      const { activeSurvey: s, activePhase: p } = await fetchActiveSurveyData(agent?.boothNo)
+      const [{ activeSurvey: s, activePhase: p }, v] = await Promise.all([
+        fetchActiveSurveyData(agent?.boothNo),
+        agent?.boothNo ? fetchVotersForBooth(agent.boothNo) : Promise.resolve(null),
+      ])
       setActiveSurvey(s)
       setActivePhase(p)
-      if (agent?.boothNo) {
-        const v = await fetchVotersForBooth(agent.boothNo)
-        setVoters(v)
-      }
+      if (v) setVoters(v)
     } catch (_) {
       setLoadError(true)
     }

@@ -13,6 +13,16 @@ const SURVEY_TTL = 5 * 60 * 1000
 
 export function invalidateSurveyCache() { _surveyCacheAt = 0 }
 
+// ── Voter cache (5 min TTL per booth) ─────────────────────────────────────────
+const _voterCache = {}
+const _voterCacheAt = {}
+const VOTER_TTL = 5 * 60 * 1000
+
+export function invalidateVoterCache(boothNo) {
+  if (boothNo) delete _voterCache[boothNo]
+  else Object.keys(_voterCache).forEach(k => delete _voterCache[k])
+}
+
 let realtimeChannel = null
 
 export function startSyncListener() {
@@ -163,13 +173,20 @@ export async function fetchActivePoll(boothNo) {
   return assigned.includes(String(boothNo)) ? active : null
 }
 
-export async function fetchVotersForBooth(boothNo) {
+export async function fetchVotersForBooth(boothNo, { force = false } = {}) {
+  const key = String(boothNo)
+  if (!force && _voterCache[key] && Date.now() - _voterCacheAt[key] < VOTER_TTL) {
+    return _voterCache[key]
+  }
   const { data, error } = await supabase
     .from('voters')
     .select('*')
-    .eq('boothNo', String(boothNo))
+    .eq('boothNo', key)
     .order('inserted_at', { ascending: true })
 
   if (error) throw error
-  return (data || []).map(r => ({ ...r.data, id: r.id, boothNo: r.boothNo }))
+  const result = (data || []).map(r => ({ ...r.data, id: r.id, boothNo: r.boothNo }))
+  _voterCache[key] = result
+  _voterCacheAt[key] = Date.now()
+  return result
 }
