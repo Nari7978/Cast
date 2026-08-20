@@ -18,7 +18,6 @@ function FilterBtn({ label, value }) {
   )
 }
 
-// Gender helpers matching mobile app
 const isMale   = g => { const t = (g||'').trim(); const u = t.toUpperCase(); return u === 'MALE' || u === 'M' || t === 'पुरुष' }
 const isFemale = g => { const t = (g||'').trim(); const u = t.toUpperCase(); return u === 'FEMALE' || u === 'F' || t === 'महिला' }
 const isOther  = g => { const t = (g||'').trim(); const u = t.toUpperCase(); return u === 'OTHER' || u === 'O' || t === 'तृतीय लिंग' }
@@ -59,8 +58,15 @@ export default function Dashboard() {
     const todayStr = new Date().toDateString()
     const todayResponses = responses.filter(r => r.submittedAt && new Date(r.submittedAt).toDateString() === todayStr).length
 
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yStr = yesterday.toDateString()
+    const yesterdayTotal = responses.filter(r => r.submittedAt && new Date(r.submittedAt).toDateString() === yStr).length
+
+    const sixtyMinAgo = Date.now() - 60 * 60 * 1000
+    const velocity = responses.filter(r => r.submittedAt && new Date(r.submittedAt).getTime() >= sixtyMinAgo).length
+
     // ── Voter demographics ─────────────────────────────────────────────────
-    // Sum voterCount from booths table — accurate even with multi-booth CSV imports
     const totalVoters = booths.reduce((sum, b) => sum + (b.voterCount || 0), 0) || voters.length
 
     let maleCount = 0, femaleCount = 0, otherCount = 0
@@ -71,7 +77,6 @@ export default function Dashboard() {
       if (isMale(g))        maleCount++
       else if (isFemale(g)) femaleCount++
       else if (isOther(g))  otherCount++
-
       const age = getAge(v.data)
       if (age >= 18 && age <= 25)      ageBuckets['18–25']++
       else if (age >= 26 && age <= 35) ageBuckets['26–35']++
@@ -89,8 +94,49 @@ export default function Dashboard() {
 
     const ageTotal = Object.values(ageBuckets).reduce((s, v) => s + v, 0) || 1
     const ageData = Object.entries(ageBuckets).map(([group, count]) => ({
-      group, value: Math.round(count / ageTotal * 100),
+      group, count, value: Math.round(count / ageTotal * 100),
     }))
+
+    // ── Per-booth stats ────────────────────────────────────────────────────
+    const boothResponseCounts = {}
+    responses.forEach(r => {
+      const b = String(r.boothNo || '')
+      if (b) boothResponseCounts[b] = (boothResponseCounts[b] || 0) + 1
+    })
+    const boothStats = booths
+      .map(b => ({
+        boothNo: b.boothNo,
+        pollingStation: b.pollingStation || '',
+        voterCount: b.voterCount || 0,
+        responseCount: boothResponseCounts[String(b.boothNo)] || 0,
+        rate: b.voterCount
+          ? Math.min(100, Math.round((boothResponseCounts[String(b.boothNo)] || 0) / b.voterCount * 100))
+          : 0,
+      }))
+      .sort((a, b) => b.responseCount - a.responseCount)
+
+    // ── Coverage rate ──────────────────────────────────────────────────────
+    const boothsWithResponses = new Set(
+      responses.map(r => String(r.boothNo || '')).filter(Boolean)
+    )
+    const coverageRate = booths.length
+      ? Math.round(boothsWithResponses.size / booths.length * 100)
+      : 0
+
+    // ── Per-agent stats ────────────────────────────────────────────────────
+    const agentRespCounts = {}
+    responses.forEach(r => {
+      const k = String(r.agentId || r.agentName || r.agent || '')
+      if (k) agentRespCounts[k] = (agentRespCounts[k] || 0) + 1
+    })
+    const agentStats = agents
+      .map(a => ({
+        name: a.name || '—',
+        boothNo: a.boothNo || '—',
+        status: a.status || '—',
+        responseCount: agentRespCounts[String(a.id || a.name || '')] || 0,
+      }))
+      .sort((a, b) => b.responseCount - a.responseCount)
 
     // ── Issue / answer distribution from responses ─────────────────────────
     const valueCounts = {}
@@ -119,6 +165,18 @@ export default function Dashboard() {
       { name: 'Pending',   value: pending   || 0, color: '#F59E0B' },
     ]
 
+    // ── Recent activity feed ───────────────────────────────────────────────
+    const recentActivity = [...responses]
+      .filter(r => r.submittedAt || r.inserted_at)
+      .sort((a, b) => new Date(b.submittedAt || b.inserted_at) - new Date(a.submittedAt || a.inserted_at))
+      .slice(0, 10)
+      .map(r => ({
+        boothNo: r.boothNo || '?',
+        agentName: r.agentName || r.agentId || r.agent || 'Agent',
+        voterName: r.voterName || r.name || null,
+        submittedAt: r.submittedAt || r.inserted_at,
+      }))
+
     setStats({
       totalBooths: booths.length,
       totalVoters,
@@ -129,6 +187,9 @@ export default function Dashboard() {
       totalPhases: phases.length,
       totalResponses,
       todayResponses,
+      yesterdayTotal,
+      velocity,
+      coverageRate,
       latestPhase,
       booths,
       agents,
@@ -140,6 +201,9 @@ export default function Dashboard() {
       ageData,
       issueData,
       responseStatusData,
+      boothStats,
+      agentStats,
+      recentActivity,
     })
     setSynced(new Date())
     setLoading(false)
@@ -154,20 +218,19 @@ export default function Dashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' },       loadStats)
       .subscribe()
     const poll = setInterval(loadStats, 10000)
-    // Refresh when user navigates back to this browser tab
     const onVisible = () => { if (document.visibilityState === 'visible') loadStats() }
     document.addEventListener('visibilitychange', onVisible)
     return () => { supabase.removeChannel(channel); clearInterval(poll); document.removeEventListener('visibilitychange', onVisible) }
   }, [])
 
   const syncLabel = synced
-    ? `Synced at ${synced.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
+    ? `Synced ${synced.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
     : 'Loading…'
 
   const phaseName = stats?.latestPhase?.name || 'No phase yet'
 
   return (
-    <div className="-m-6">
+    <div className="-m-6" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <div className="px-6 py-3 bg-white border-b border-[#E8ECF4] flex items-center gap-3 flex-wrap">
         <FilterBtn label="Phase" value={phaseName} />
         <div className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer hover:text-slate-600 transition-colors"
@@ -179,7 +242,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="p-6 space-y-6 min-h-screen" style={{ background: '#F5F7FB' }}>
+      <div className="p-6 space-y-5" style={{ background: '#F0F3FA', minHeight: '100vh' }}>
         <KPIGrid stats={stats} />
         <ChartsRow1 stats={stats} />
         <TablesRow2 stats={stats} />

@@ -1,8 +1,7 @@
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, defs, linearGradient, stop,
 } from 'recharts'
-import { ArrowRight } from 'lucide-react'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -23,202 +22,133 @@ function buildTrend(responses) {
     .map(([date, count]) => ({ date, responses: count }))
 }
 
-function Card({ title, subtitle, children, action }) {
+function CustomTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
   return (
-    <div className="bg-white rounded-2xl border border-[#E8ECF4] p-5 h-full" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-slate-800 font-semibold text-[13px]">{title}</h3>
-          {subtitle && <p className="text-slate-400 text-[11px] mt-0.5">{subtitle}</p>}
-        </div>
-        {action && (
-          <button className="flex items-center gap-1 text-[11px] font-semibold text-[#5B5CEB] hover:gap-2 transition-all">
-            {action} <ArrowRight size={11} />
-          </button>
-        )}
-      </div>
-      {children}
+    <div style={{ background: '#0F172A', border: 'none', borderRadius: 10, padding: '8px 14px', fontSize: 12 }}>
+      <p style={{ color: '#94A3B8', marginBottom: 2 }}>{label}</p>
+      <p style={{ color: '#fff', fontWeight: 700 }}>{payload[0].value} responses</p>
     </div>
-  )
-}
-
-function CampaignProgress({ stats }) {
-  const phase        = stats?.latestPhase
-  const total        = phase?.booths        || 0
-  const completed    = phase?.completedBooths  || 0
-  const inProgress   = phase?.pendingBooths    || 0
-  const remaining    = Math.max(0, total - completed - inProgress)
-  const pct          = total ? Math.round((completed / total) * 100) : 0
-
-  const bars = [
-    { label: 'Assigned',    value: total,       pct: 100,                              color: '#5B5CEB', bg: '#EEF2FF' },
-    { label: 'Completed',   value: completed,   pct: total ? Math.round(completed/total*100)  : 0, color: '#10B981', bg: '#ECFDF5' },
-    { label: 'In Progress', value: inProgress,  pct: total ? Math.round(inProgress/total*100) : 0, color: '#F59E0B', bg: '#FFFBEB' },
-    { label: 'Remaining',   value: remaining,   pct: total ? Math.round(remaining/total*100)  : 0, color: '#94A3B8', bg: '#F8FAFC' },
-  ]
-
-  return (
-    <Card title="Campaign Progress" subtitle={phase ? phase.name : 'No phase data'}>
-      <div className="mb-5">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-slate-500 text-[12px]">Overall Completion</span>
-          <span className="font-bold text-lg" style={{ color: '#5B5CEB' }}>{pct}%</span>
-        </div>
-        <div className="h-3 rounded-full overflow-hidden" style={{ background: '#F1F5F9' }}>
-          <div className="h-full rounded-full transition-all"
-            style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #5B5CEB, #818CF8)' }} />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {bars.map(({ label, value, pct: p, color, bg }) => (
-          <div key={label} className="rounded-xl p-3 border border-slate-100" style={{ background: bg }}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-              <span className="text-slate-500 text-[11px]">{label}</span>
-            </div>
-            <p className="font-bold text-2xl text-slate-800">{value}</p>
-            <p className="text-slate-400 text-[10px] mt-0.5">{p}% of total</p>
-          </div>
-        ))}
-      </div>
-    </Card>
   )
 }
 
 function ResponseTrend({ stats }) {
   const trendData = buildTrend(stats?.responses)
   const hasData = trendData.length > 0
+  const total = stats?.totalResponses || 0
+  const today = stats?.todayResponses || 0
 
   return (
-    <Card
-      title="Response Trend"
-      subtitle={hasData ? `${stats.responses.length} total responses` : 'No response data collected yet'}
-      action="View All"
-    >
+    <div className="bg-white rounded-2xl border border-[#E2E8F0] p-5 h-full"
+      style={{ boxShadow: '0 1px 4px rgba(15,23,42,0.06)' }}>
+      <div className="flex items-start justify-between mb-5">
+        <div>
+          <h3 className="text-slate-900 font-bold text-[15px]">Response Trend</h3>
+          <p className="text-slate-400 text-[11px] mt-0.5">Daily submission volume</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] text-slate-400">Total collected</p>
+          <p className="text-[20px] font-extrabold text-slate-900 leading-tight">{total >= 1000 ? (total/1000).toFixed(1)+'K' : total}</p>
+        </div>
+      </div>
+
       {hasData ? (
-        <ResponsiveContainer width="100%" height={230}>
-          <LineChart data={trendData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip
-              contentStyle={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 12 }}
-              itemStyle={{ color: '#5B5CEB' }}
-              labelStyle={{ color: '#1E293B', fontWeight: 600 }}
-            />
-            <Line
+        <ResponsiveContainer width="100%" height={210}>
+          <AreaChart data={trendData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+            <defs>
+              <linearGradient id="respGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#5B5CEB" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="#5B5CEB" stopOpacity={0.01} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94A3B8', fontFamily: 'Plus Jakarta Sans' }}
+              axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: '#94A3B8', fontFamily: 'Plus Jakarta Sans' }}
+              axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip content={<CustomTooltip />} />
+            <Area
               type="monotone" dataKey="responses"
               stroke="#5B5CEB" strokeWidth={2.5}
-              dot={{ fill: '#5B5CEB', r: 4, strokeWidth: 0 }}
-              activeDot={{ r: 6, fill: '#5B5CEB' }}
+              fill="url(#respGrad)"
+              dot={false}
+              activeDot={{ r: 5, fill: '#5B5CEB', strokeWidth: 0 }}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       ) : (
-        <div className="flex items-center justify-center h-[230px]">
-          <p className="text-slate-300 text-[13px]">Responses will appear here once collected</p>
+        <div className="flex flex-col items-center justify-center h-[210px] gap-2">
+          <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center">
+            <span className="text-[20px]">📊</span>
+          </div>
+          <p className="text-slate-300 text-[13px]">Responses appear once collected</p>
         </div>
       )}
-    </Card>
+    </div>
   )
 }
 
-function BoothCoverage({ stats }) {
-  const total     = stats?.totalBooths || 0
-  const completed = stats?.latestPhase?.completedBooths || 0
-  const inProgress = stats?.latestPhase?.pendingBooths || 0
-  const notStarted = Math.max(0, total - completed - inProgress)
-  const pct = total ? Math.round((completed / total) * 100) : 0
+function CampaignSummary({ stats }) {
+  const phase      = stats?.latestPhase
+  const coverage   = stats?.coverageRate ?? 0
+  const total      = stats?.totalResponses ?? 0
+  const today      = stats?.todayResponses ?? 0
+  const velocity   = stats?.velocity ?? 0
+  const activeA    = stats?.activeAgents ?? 0
+  const totalA     = stats?.totalAgents ?? 0
 
-  const coverageData = [
-    { name: 'Completed',   value: completed  || 1, color: '#5B5CEB' },
-    { name: 'In Progress', value: inProgress || 0, color: '#F59E0B' },
-    { name: 'Not Started', value: notStarted || 0, color: '#E2E8F0' },
+  const rows = [
+    { label: 'Phase', value: phase?.name || '—', accent: false },
+    { label: 'Total responses', value: total.toLocaleString(), accent: false },
+    { label: 'Today', value: today.toLocaleString(), accent: true, color: '#5B5CEB' },
+    { label: 'Last hour', value: velocity.toLocaleString(), accent: true, color: '#D97706' },
+    { label: 'Active agents', value: `${activeA} / ${totalA}`, accent: false },
   ]
-  const displayTotal = total || 1
 
   return (
-    <Card title="Booth Coverage" subtitle="Distribution by status">
-      <div className="flex flex-col items-center">
-        <div className="relative w-36 h-36">
-          <PieChart width={144} height={144}>
-            <Pie data={coverageData} cx={68} cy={68} innerRadius={44} outerRadius={64} dataKey="value" stroke="none">
-              {coverageData.map((e, i) => <Cell key={i} fill={e.color} />)}
-            </Pie>
-          </PieChart>
+    <div className="bg-white rounded-2xl border border-[#E2E8F0] p-5 flex flex-col h-full"
+      style={{ boxShadow: '0 1px 4px rgba(15,23,42,0.06)' }}>
+      <h3 className="text-slate-900 font-bold text-[15px] mb-1">Campaign Summary</h3>
+      <p className="text-slate-400 text-[11px] mb-5">Live snapshot</p>
+
+      {/* Big coverage ring */}
+      <div className="flex flex-col items-center mb-6">
+        <div className="relative" style={{ width: 120, height: 120 }}>
+          <svg width="120" height="120" style={{ transform: 'rotate(-90deg)' }}>
+            <circle cx="60" cy="60" r="50" fill="none" stroke="#E2E8F0" strokeWidth="10" />
+            <circle cx="60" cy="60" r="50" fill="none" stroke="#059669" strokeWidth="10"
+              strokeLinecap="round"
+              strokeDasharray={`${(coverage / 100) * (2 * Math.PI * 50)} ${2 * Math.PI * 50}`}
+              style={{ transition: 'stroke-dasharray 0.8s ease' }}
+            />
+          </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <p className="font-bold text-xl text-slate-800">{pct}%</p>
-            <p className="text-[10px] text-slate-400">covered</p>
+            <p className="text-[28px] font-extrabold text-slate-900 leading-none">{coverage}%</p>
+            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">coverage</p>
           </div>
         </div>
-        <div className="w-full space-y-2 mt-3">
-          {coverageData.map(({ name, value, color }) => (
-            <div key={name} className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{ background: color }} />
-                <span className="text-slate-500 text-[12px]">{name}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-800 text-[12px] font-semibold">{value}</span>
-                <span className="text-slate-400 text-[10px]">{Math.round(value / displayTotal * 100)}%</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        <p className="text-[11px] text-slate-400 mt-2">Booths with ≥1 response</p>
       </div>
-    </Card>
-  )
-}
 
-function BoothHealth({ stats }) {
-  const total    = stats?.totalAgents || 0
-  const active   = stats?.activeAgents || 0
-  const inactive = Math.max(0, total - active)
-  const pct = total ? Math.round((active / total) * 100) : 0
-
-  const healthData = [
-    { name: 'Active',   value: active   || 1, color: '#10B981' },
-    { name: 'Inactive', value: inactive || 0, color: '#EF4444' },
-  ]
-
-  return (
-    <Card title="Agent Health" subtitle="Agent activity status">
-      <div className="flex flex-col items-center">
-        <div className="relative" style={{ height: 96 }}>
-          <PieChart width={160} height={96}>
-            <Pie data={healthData} cx={76} cy={88} startAngle={180} endAngle={0}
-              innerRadius={44} outerRadius={66} dataKey="value" stroke="none">
-              {healthData.map((e, i) => <Cell key={i} fill={e.color} />)}
-            </Pie>
-          </PieChart>
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-center pb-1">
-            <p className="font-bold text-lg text-slate-800 leading-tight">{pct}%</p>
-            <p className="text-[10px] font-semibold" style={{ color: '#10B981' }}>Active</p>
+      <div className="space-y-3 flex-1">
+        {rows.map(({ label, value, accent, color }) => (
+          <div key={label} className="flex items-center justify-between">
+            <span className="text-[12px] text-slate-400">{label}</span>
+            <span className="text-[13px] font-bold" style={{ color: accent ? color : '#0F172A' }}>
+              {value}
+            </span>
           </div>
-        </div>
-        <div className="w-full space-y-2 mt-4">
-          {healthData.map(({ name, value, color }) => (
-            <div key={name} className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{ background: color }} />
-                <span className="text-slate-500 text-[12px]">{name}</span>
-              </div>
-              <span className="text-slate-800 text-[12px] font-semibold">{value}</span>
-            </div>
-          ))}
-        </div>
+        ))}
       </div>
-    </Card>
+    </div>
   )
 }
 
 export default function ChartsRow1({ stats }) {
   return (
     <div className="grid grid-cols-12 gap-5">
-      <div className="col-span-3"><CampaignProgress stats={stats} /></div>
-      <div className="col-span-5"><ResponseTrend stats={stats} /></div>
-      <div className="col-span-2"><BoothCoverage stats={stats} /></div>
-      <div className="col-span-2"><BoothHealth stats={stats} /></div>
+      <div className="col-span-8"><ResponseTrend stats={stats} /></div>
+      <div className="col-span-4"><CampaignSummary stats={stats} /></div>
     </div>
   )
 }
