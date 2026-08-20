@@ -87,8 +87,11 @@ function VoterDetailModal({ voter, response, questions, activeSurveyId, onClose 
         const entries = (data || []).map(r => ({ ...r.data, _rowId: r.id, _at: r.inserted_at }))
         setHistory(entries)
 
-        // Fetch question text for each unique surveyId found in history
-        const surveyIds = [...new Set(entries.map(r => r.surveyId).filter(Boolean))]
+        // Fetch question text for each unique surveyId (history + current response)
+        const surveyIds = [...new Set([
+          ...entries.map(r => r.surveyId),
+          response?.surveyId,
+        ].filter(Boolean))]
         if (surveyIds.length === 0) return
         const { data: survRows } = await supabase
           .from('surveys')
@@ -209,7 +212,7 @@ function VoterDetailModal({ voter, response, questions, activeSurveyId, onClose 
                     <Text style={styles.fieldValue}>{formatDate(response.submittedAt)}</Text>
                   </View>
                 )}
-                {renderAnswers(response.answers, qTextMap)}
+                {renderAnswers(response.answers, surveyQMaps[response.surveyId] || qTextMap)}
               </View>
             ) : (
               <View style={[styles.fieldCard, { alignItems: 'center', paddingVertical: 16 }]}>
