@@ -153,8 +153,11 @@ export default function Dashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'responses' },   loadStats)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' },       loadStats)
       .subscribe()
-    const poll = setInterval(loadStats, 30000)
-    return () => { supabase.removeChannel(channel); clearInterval(poll) }
+    const poll = setInterval(loadStats, 10000)
+    // Refresh when user navigates back to this browser tab
+    const onVisible = () => { if (document.visibilityState === 'visible') loadStats() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { supabase.removeChannel(channel); clearInterval(poll); document.removeEventListener('visibilitychange', onVisible) }
   }, [])
 
   const syncLabel = synced
