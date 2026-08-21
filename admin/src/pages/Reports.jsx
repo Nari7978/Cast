@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Cell,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
   ChevronDown, Users, UserCheck, Loader2, Search,
-  TrendingUp, Activity, BarChart2, Clock, Filter, Download,
+  TrendingUp, Activity, BarChart2, Download, Layers,
 } from 'lucide-react'
 import { supabase } from '../supabase/config'
 
@@ -68,21 +68,30 @@ function SectionCard({ title, subtitle, children, right }) {
   )
 }
 
-function HBar({ label, value, pct, color, max }) {
-  const w = max ? Math.round(value/max*100) : pct
+// responded = how many responded (optional) — shows "responded / total" when provided
+function HBar({ label, value, pct, color, max, responded }) {
+  const w = max ? Math.round(value / max * 100) : pct
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[12px] text-slate-600 font-medium truncate max-w-[55%]">{label}</span>
+        <span className="text-[12px] text-slate-600 font-medium truncate max-w-[50%]">{label}</span>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-[11px] text-slate-400">{value}</span>
+          {responded !== undefined ? (
+            <span className="text-[11px] text-slate-500">
+              <span className="font-bold" style={{ color }}>{responded.toLocaleString()}</span>
+              <span className="text-slate-300 mx-0.5">/</span>
+              <span className="text-slate-400">{value.toLocaleString()}</span>
+            </span>
+          ) : (
+            <span className="text-[11px] text-slate-400">{value.toLocaleString()}</span>
+          )}
           <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md"
-            style={{ color, background: color+'1A' }}>{pct}%</span>
+            style={{ color, background: color + '1A' }}>{pct}%</span>
         </div>
       </div>
       <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${Math.min(100,w)}%`, background: color }} />
+          style={{ width: `${Math.min(100, w)}%`, background: color }} />
       </div>
     </div>
   )
@@ -110,7 +119,8 @@ function BoothSelector({ booths, selected, onChange }) {
         className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E2E8F0] rounded-xl text-[13px] font-semibold text-slate-700 hover:border-[#5B5CEB]/40 transition-colors min-w-[240px] justify-between"
         style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.05)' }}>
         <span className="truncate">{label}</span>
-        <ChevronDown size={14} className="text-slate-400 flex-shrink-0" style={{ transform: open ? 'rotate(180deg)' : '', transition: 'transform 0.2s' }} />
+        <ChevronDown size={14} className="text-slate-400 flex-shrink-0"
+          style={{ transform: open ? 'rotate(180deg)' : '', transition: 'transform 0.2s' }} />
       </button>
 
       {open && (
@@ -152,73 +162,145 @@ function BoothSelector({ booths, selected, onChange }) {
   )
 }
 
+// ── Phase selector dropdown ───────────────────────────────────────────────────
+
+function PhaseSelector({ phases, selected, onChange }) {
+  const [open, setOpen] = useState(false)
+  const label = selected ? selected.name : 'All Phases'
+  const STATUS_COLOR = { Active: '#10B981', Completed: '#5B5CEB', Upcoming: '#F59E0B', Draft: '#94A3B8', Archived: '#EF4444' }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E2E8F0] rounded-xl text-[13px] font-semibold text-slate-700 hover:border-[#5B5CEB]/40 transition-colors min-w-[180px] justify-between"
+        style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.05)' }}>
+        <div className="flex items-center gap-2 truncate">
+          <Layers size={13} className="text-slate-400 flex-shrink-0" />
+          <span className="truncate">{label}</span>
+        </div>
+        <ChevronDown size={14} className="text-slate-400 flex-shrink-0"
+          style={{ transform: open ? 'rotate(180deg)' : '', transition: 'transform 0.2s' }} />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-[#E2E8F0] rounded-2xl shadow-xl z-20 overflow-hidden">
+            <div className="max-h-60 overflow-y-auto">
+              <button
+                onClick={() => { onChange(null); setOpen(false) }}
+                className="w-full text-left px-4 py-3 text-[12px] font-semibold hover:bg-slate-50 transition-colors border-b border-slate-50"
+                style={{ color: !selected ? '#5B5CEB' : '#64748B' }}>
+                All Phases
+              </button>
+              {phases.map(p => (
+                <button key={p.id}
+                  onClick={() => { onChange(p); setOpen(false) }}
+                  className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[12px] font-semibold" style={{ color: selected?.id === p.id ? '#5B5CEB' : '#334155' }}>{p.name}</p>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                      style={{ color: STATUS_COLOR[p.status] || '#94A3B8', background: (STATUS_COLOR[p.status] || '#94A3B8') + '18' }}>
+                      {p.status}
+                    </span>
+                  </div>
+                </button>
+              ))}
+              {phases.length === 0 && (
+                <p className="text-slate-300 text-[12px] text-center py-6">No phases found</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Demographics panel ────────────────────────────────────────────────────────
 
 function Demographics({ voters, responses }) {
   const stats = useMemo(() => {
+    // Totals from all registered voters
     let male = 0, female = 0, other = 0
-    const ages = { '18–25': 0, '26–35': 0, '36–45': 0, '46–60': 0, '60+': 0 }
+    const ages    = { '18–25': 0, '26–35': 0, '36–45': 0, '46–60': 0, '60+': 0 }
 
-    // Gender + age of ALL voters in booth
     voters.forEach(v => {
       const g = getGender(v.data)
       if (isMale(g)) male++
       else if (isFemale(g)) female++
-      else if (isOther(g)) other++
+      else other++
       const age = getAge(v.data)
-      if (age >= 18 && age <= 25) ages['18–25']++
+      if (age >= 18 && age <= 25)      ages['18–25']++
       else if (age >= 26 && age <= 35) ages['26–35']++
       else if (age >= 36 && age <= 45) ages['36–45']++
       else if (age >= 46 && age <= 60) ages['46–60']++
-      else if (age > 60) ages['60+']++
+      else if (age > 60)               ages['60+']++
     })
 
-    // Gender of SURVEYED voters (who submitted a response)
+    // Responded counts from response data
     let rMale = 0, rFemale = 0, rOther = 0
+    const rAges = { '18–25': 0, '26–35': 0, '36–45': 0, '46–60': 0, '60+': 0 }
+
     responses.forEach(r => {
-      const g = getGender(r.voterData || {})
+      const vd  = r.voterData || {}
+      const g   = getGender(vd)
       if (isMale(g)) rMale++
       else if (isFemale(g)) rFemale++
-      else if (isOther(g)) rOther++
+      else rOther++
+
+      const age = getAge(vd)
+      if (age >= 18 && age <= 25)      rAges['18–25']++
+      else if (age >= 26 && age <= 35) rAges['26–35']++
+      else if (age >= 36 && age <= 45) rAges['36–45']++
+      else if (age >= 46 && age <= 60) rAges['46–60']++
+      else if (age > 60)               rAges['60+']++
     })
 
     const total = male + female + other || 1
-    return { male, female, other, total, ages, rMale, rFemale, rOther }
+    return { male, female, other, total, ages, rMale, rFemale, rOther, rAges }
   }, [voters, responses])
 
   const genderRows = [
-    { label: 'Male',   count: stats.male,   color: '#5B5CEB' },
-    { label: 'Female', count: stats.female, color: '#EC4899' },
-    { label: 'Other',  count: stats.other,  color: '#94A3B8' },
+    { label: 'Male',   count: stats.male,   responded: stats.rMale,   color: '#5B5CEB' },
+    { label: 'Female', count: stats.female, responded: stats.rFemale, color: '#EC4899' },
+    { label: 'Other',  count: stats.other,  responded: stats.rOther,  color: '#94A3B8' },
   ]
   const maxAge = Math.max(...Object.values(stats.ages), 1)
 
   return (
     <div className="grid grid-cols-2 gap-5">
       {/* Gender */}
-      <SectionCard title="Gender Breakdown" subtitle="All registered voters in this booth">
+      <SectionCard
+        title="Gender Breakdown"
+        subtitle="Responded / Total registered voters"
+      >
         <div className="space-y-3">
-          {genderRows.map(({ label, count, color }) => (
+          {genderRows.map(({ label, count, responded, color }) => (
             <HBar key={label} label={label} value={count}
-              pct={Math.round(count/stats.total*100)} color={color} />
+              responded={responded}
+              pct={Math.round(count / stats.total * 100)} color={color} />
           ))}
         </div>
         <div className="mt-5 pt-4 border-t border-slate-50 grid grid-cols-3 gap-3">
-          {genderRows.map(({ label, count, color }) => (
-            <div key={label} className="text-center p-3 rounded-xl" style={{ background: color+'12' }}>
-              <p className="text-[20px] font-extrabold" style={{ color }}>{fmt(count)}</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">{label}</p>
+          {genderRows.map(({ label, count, responded, color }) => (
+            <div key={label} className="text-center p-3 rounded-xl" style={{ background: color + '12' }}>
+              <p className="text-[18px] font-extrabold" style={{ color }}>{fmt(responded)}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">of {fmt(count)}</p>
+              <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{label}</p>
             </div>
           ))}
         </div>
       </SectionCard>
 
       {/* Age */}
-      <SectionCard title="Age Distribution" subtitle="Registered voters by age group">
+      <SectionCard title="Age Distribution" subtitle="Responded / Total registered voters by age group">
         <div className="space-y-3">
           {Object.entries(stats.ages).map(([group, count]) => (
             <HBar key={group} label={group} value={count}
-              pct={Math.round(count/stats.total*100)} color="#5B5CEB"
+              responded={stats.rAges[group]}
+              pct={Math.round(count / stats.total * 100)} color="#5B5CEB"
               max={maxAge} />
           ))}
         </div>
@@ -232,7 +314,6 @@ function Demographics({ voters, responses }) {
 function SurveyBreakdown({ responses, surveys }) {
   const [activeSurveyId, setActiveSurveyId] = useState(null)
 
-  // Find which surveys are represented in these responses
   const surveyIds = useMemo(() => [...new Set(responses.map(r => r.surveyId).filter(Boolean))], [responses])
 
   useEffect(() => {
@@ -241,11 +322,8 @@ function SurveyBreakdown({ responses, surveys }) {
 
   const activeSurvey = surveys.find(s => s.id === activeSurveyId)
   const questions = activeSurvey?.data?.questions || []
-
-  // Filter responses to active survey
   const surveyResponses = responses.filter(r => r.surveyId === activeSurveyId)
 
-  // Build answer distribution per question
   const qStats = useMemo(() => {
     return questions.map(q => {
       const counts = {}
@@ -259,7 +337,7 @@ function SurveyBreakdown({ responses, surveys }) {
           }
         })
       })
-      const entries = Object.entries(counts).sort((a,b) => b[1]-a[1])
+      const entries = Object.entries(counts).sort((a, b) => b[1] - a[1])
       const maxV = entries[0]?.[1] || 1
       return { q, entries, maxV, total: surveyResponses.length }
     }).filter(s => s.entries.length > 0)
@@ -271,7 +349,7 @@ function SurveyBreakdown({ responses, surveys }) {
     return (
       <SectionCard title="Survey Responses" subtitle="Question-by-question breakdown">
         <div className="flex items-center justify-center py-12">
-          <p className="text-slate-300 text-[13px]">No survey responses in this booth yet</p>
+          <p className="text-slate-300 text-[13px]">No survey responses yet</p>
         </div>
       </SectionCard>
     )
@@ -283,9 +361,7 @@ function SurveyBreakdown({ responses, surveys }) {
       subtitle={`${surveyResponses.length} submissions · ${questions.length} questions`}
       right={
         surveyIds.length > 1 ? (
-          <select
-            value={activeSurveyId || ''}
-            onChange={e => setActiveSurveyId(e.target.value)}
+          <select value={activeSurveyId || ''} onChange={e => setActiveSurveyId(e.target.value)}
             className="text-[12px] border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 focus:outline-none">
             {surveyIds.map(id => {
               const s = surveys.find(sv => sv.id === id)
@@ -305,16 +381,12 @@ function SurveyBreakdown({ responses, surveys }) {
             <div key={q.id}>
               <div className="flex items-start gap-2 mb-3">
                 <span className="flex-shrink-0 w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center mt-0.5"
-                  style={{ background: '#5B5CEB' }}>
-                  {qi + 1}
-                </span>
-                <p className="text-[13px] font-semibold text-slate-800">
-                  {q.question || q.text || q.label || q.id}
-                </p>
+                  style={{ background: '#5B5CEB' }}>{qi + 1}</span>
+                <p className="text-[13px] font-semibold text-slate-800">{q.question || q.text || q.label || q.id}</p>
               </div>
               <div className="space-y-2 ml-7">
                 {entries.slice(0, 8).map(([ans, count], i) => {
-                  const pct = Math.round(count/total*100)
+                  const pct   = Math.round(count / total * 100)
                   const color = colors[i % colors.length]
                   return (
                     <div key={ans}>
@@ -323,12 +395,12 @@ function SurveyBreakdown({ responses, surveys }) {
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-[11px] text-slate-400">{count}</span>
                           <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-md"
-                            style={{ color, background: color+'18' }}>{pct}%</span>
+                            style={{ color, background: color + '18' }}>{pct}%</span>
                         </div>
                       </div>
                       <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                         <div className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${Math.round(count/maxV*100)}%`, background: color }} />
+                          style={{ width: `${Math.round(count / maxV * 100)}%`, background: color }} />
                       </div>
                     </div>
                   )
@@ -353,12 +425,12 @@ function Timeline({ responses }) {
     responses.forEach(r => {
       const d = new Date(r.submittedAt || r.inserted_at)
       if (isNaN(d)) return
-      const key = `${String(d.getDate()).padStart(2,'0')} ${MONTHS[d.getMonth()]}`
+      const key = `${String(d.getDate()).padStart(2, '0')} ${MONTHS[d.getMonth()]}`
       counts[key] = (counts[key] || 0) + 1
     })
     return Object.entries(counts)
-      .sort((a,b) => {
-        const parse = s => { const [day,mon] = s.split(' '); return MONTHS.indexOf(mon)*31+parseInt(day) }
+      .sort((a, b) => {
+        const parse = s => { const [day, mon] = s.split(' '); return MONTHS.indexOf(mon) * 31 + parseInt(day) }
         return parse(a[0]) - parse(b[0])
       })
       .map(([date, count]) => ({ date, responses: count }))
@@ -418,10 +490,9 @@ function ResponseList({ responses, surveys }) {
     (r.agentName||'').toLowerCase().includes(q.toLowerCase())
   )
   const total = filtered.length
-  const pages = Math.max(1, Math.ceil(total/PAGE))
-  const rows  = filtered.slice((page-1)*PAGE, page*PAGE)
+  const pages = Math.max(1, Math.ceil(total / PAGE))
+  const rows  = filtered.slice((page - 1) * PAGE, page * PAGE)
 
-  // Build qMap from surveys
   const qMap = useMemo(() => {
     const map = {}
     surveys.forEach(s => {
@@ -455,14 +526,14 @@ function ResponseList({ responses, surveys }) {
             const answers = r.answers || {}
             const preview = Object.entries(answers).slice(0, 2).map(([qid, ans]) => {
               const text = qMap[qid] || qid
-              const val  = Array.isArray(ans) ? ans.join(', ') : String(ans||'')
+              const val  = Array.isArray(ans) ? ans.join(', ') : String(ans || '')
               return `${text}: ${val}`
             }).join(' · ')
             return (
-              <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50/70 transition-colors group">
+              <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50/70 transition-colors">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0"
                   style={{ background: '#5B5CEB' }}>
-                  {String(r.boothNo||'?').slice(0,2)}
+                  {String(r.boothNo || '?').slice(0, 2)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
@@ -474,11 +545,9 @@ function ResponseList({ responses, surveys }) {
                         {r.agentName ? `via ${r.agentName}` : 'Direct submission'}
                       </p>
                     </div>
-                    <span className="text-[10px] text-slate-300 flex-shrink-0">{timeAgo(r.submittedAt||r.inserted_at)}</span>
+                    <span className="text-[10px] text-slate-300 flex-shrink-0">{timeAgo(r.submittedAt || r.inserted_at)}</span>
                   </div>
-                  {preview && (
-                    <p className="text-[11px] text-slate-500 mt-1.5 truncate">{preview}</p>
-                  )}
+                  {preview && <p className="text-[11px] text-slate-500 mt-1.5 truncate">{preview}</p>}
                 </div>
               </div>
             )
@@ -489,15 +558,15 @@ function ResponseList({ responses, surveys }) {
       {pages > 1 && (
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-50">
           <p className="text-[11px] text-slate-400">
-            {Math.min((page-1)*PAGE+1, total)}–{Math.min(page*PAGE, total)} of {total}
+            {Math.min((page - 1) * PAGE + 1, total)}–{Math.min(page * PAGE, total)} of {total}
           </p>
           <div className="flex items-center gap-1">
-            {[...Array(Math.min(pages,5))].map((_,i) => {
+            {[...Array(Math.min(pages, 5))].map((_, i) => {
               const p = i + 1
               return (
                 <button key={p} onClick={() => setPage(p)}
                   className="w-7 h-7 rounded-lg text-[11px] font-medium transition-all"
-                  style={page===p ? { background:'#5B5CEB', color:'#fff' } : { color:'#64748B', border:'1px solid #E2E8F0' }}>
+                  style={page === p ? { background: '#5B5CEB', color: '#fff' } : { color: '#64748B', border: '1px solid #E2E8F0' }}>
                   {p}
                 </button>
               )
@@ -512,32 +581,35 @@ function ResponseList({ responses, surveys }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Reports() {
-  const [booths,    setBooths]    = useState([])
-  const [surveys,   setSurveys]   = useState([])
-  const [selected,  setSelected]  = useState(null) // selected booth object or null = all
-  const [voters,    setVoters]    = useState([])
-  const [responses, setResponses] = useState([])
-  const [loading,   setLoading]   = useState(false)
-  const [booting,   setBooting]   = useState(true)
+  const [booths,        setBooths]        = useState([])
+  const [surveys,       setSurveys]       = useState([])
+  const [phases,        setPhases]        = useState([])
+  const [selected,      setSelected]      = useState(null)   // booth or null
+  const [selectedPhase, setSelectedPhase] = useState(null)   // phase or null
+  const [voters,        setVoters]        = useState([])
+  const [responses,     setResponses]     = useState([])
+  const [loading,       setLoading]       = useState(false)
+  const [booting,       setBooting]       = useState(true)
 
-  // Load booths + surveys once
+  // Load booths, surveys and phases once
   useEffect(() => {
     Promise.all([
       supabase.from('booths').select('boothNo, voterCount, pollingStation').order('boothNo'),
       supabase.from('surveys').select('id, data'),
-    ]).then(([bRes, sRes]) => {
+      supabase.from('phases').select('id, data').order('inserted_at', { ascending: false }),
+    ]).then(([bRes, sRes, pRes]) => {
       setBooths(bRes.data || [])
       setSurveys(sRes.data || [])
+      setPhases((pRes.data || []).map(r => ({ id: r.id, ...r.data })))
       setBooting(false)
     })
   }, [])
 
-  // Load data whenever selection changes
+  // Load voters + responses when booth changes
   useEffect(() => {
     async function load() {
       setLoading(true)
       if (selected) {
-        // Booth-specific
         const [vRes, rRes] = await Promise.all([
           supabase.from('voters').select('data').eq('boothNo', String(selected.boothNo)),
           supabase.from('responses').select('data, inserted_at')
@@ -547,7 +619,6 @@ export default function Reports() {
         setVoters(vRes.data || [])
         setResponses((rRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at })))
       } else {
-        // All booths aggregate
         const [vRes, rRes] = await Promise.all([
           supabase.from('voters').select('data').limit(100000),
           supabase.from('responses').select('data, inserted_at').order('inserted_at', { ascending: false }),
@@ -560,6 +631,13 @@ export default function Reports() {
     if (!booting) load()
   }, [selected, booting])
 
+  // Filter responses by selected phase
+  const filteredResponses = useMemo(() =>
+    selectedPhase
+      ? responses.filter(r => r.phaseId === selectedPhase.id)
+      : responses,
+  [responses, selectedPhase])
+
   // ── Computed KPIs ──────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
     let male = 0, female = 0, other = 0
@@ -567,20 +645,19 @@ export default function Reports() {
       const g = getGender(v.data)
       if (isMale(g)) male++
       else if (isFemale(g)) female++
-      else if (isOther(g)) other++
+      else other++
     })
 
     const totalVoters = selected
       ? selected.voterCount || voters.length
-      : booths.reduce((s, b) => s + (b.voterCount||0), 0) || voters.length
-    const surveyed = responses.length
+      : booths.reduce((s, b) => s + (b.voterCount || 0), 0) || voters.length
+    const surveyed = filteredResponses.length
     const rate = totalVoters ? Math.min(100, Math.round(surveyed / totalVoters * 100)) : 0
-
     const todayStr = new Date().toDateString()
-    const today = responses.filter(r => r.submittedAt && new Date(r.submittedAt).toDateString() === todayStr).length
+    const today = filteredResponses.filter(r => r.submittedAt && new Date(r.submittedAt).toDateString() === todayStr).length
 
     return { totalVoters, surveyed, rate, male, female, other, today }
-  }, [voters, responses, selected, booths])
+  }, [voters, filteredResponses, selected, booths])
 
   const boothLabel = selected
     ? `Booth ${selected.boothNo} — ${selected.pollingStation || ''}`
@@ -605,18 +682,19 @@ export default function Reports() {
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-slate-800 font-bold text-xl">Reports</h2>
-            <p className="text-slate-400 text-[13px] mt-0.5">Detailed analytics per booth</p>
+            <p className="text-slate-400 text-[13px] mt-0.5">Detailed analytics per booth and phase</p>
           </div>
           <button className="flex items-center gap-2 px-3 py-2 border border-[#E8ECF4] rounded-xl text-[12px] font-medium text-slate-600 hover:bg-slate-50 transition-colors">
             <Download size={14} /> Export
           </button>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <BoothSelector booths={booths} selected={selected} onChange={setSelected} />
+          <BoothSelector booths={booths} selected={selected} onChange={b => { setSelected(b); setSelectedPhase(null) }} />
+          <PhaseSelector phases={phases} selected={selectedPhase} onChange={setSelectedPhase} />
           {loading && <Loader2 size={14} className="animate-spin text-slate-400" />}
-          {selected && (
+          {selectedPhase && (
             <div className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-lg text-[12px] font-medium text-indigo-600">
-              {selected.pollingStation || 'Unknown station'}
+              Phase: {selectedPhase.name}
             </div>
           )}
         </div>
@@ -626,13 +704,15 @@ export default function Reports() {
 
         {/* ── KPI Strip ────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-7 gap-4">
-          <KPITile icon={Users}     label="Total Voters"   value={fmt(kpis.totalVoters)} sub={boothLabel}     color="#5B5CEB" bg="#EEF2FF" />
-          <KPITile icon={UserCheck} label="Surveyed"       value={fmt(kpis.surveyed)}    sub="Responses collected" color="#059669" bg="#ECFDF5" />
-          <KPITile icon={TrendingUp} label="Response Rate" value={`${kpis.rate}%`}       sub="Of registered voters" color={kpis.rate>=70?'#059669':kpis.rate>=40?'#D97706':'#EF4444'} bg={kpis.rate>=70?'#ECFDF5':kpis.rate>=40?'#FFFBEB':'#FEF2F2'} />
-          <KPITile icon={Activity}  label="Today"         value={fmt(kpis.today)}       sub="Submitted today"  color="#D97706" bg="#FFFBEB" />
-          <KPITile icon={BarChart2} label="Male"          value={fmt(kpis.male)}        sub="Registered voters" color="#5B5CEB" bg="#EEF2FF" />
-          <KPITile icon={BarChart2} label="Female"        value={fmt(kpis.female)}      sub="Registered voters" color="#EC4899" bg="#FDF2F8" />
-          <KPITile icon={BarChart2} label="Other"         value={fmt(kpis.other)}       sub="Registered voters" color="#94A3B8" bg="#F8FAFC" />
+          <KPITile icon={Users}      label="Total Voters"    value={fmt(kpis.totalVoters)} sub={boothLabel}          color="#5B5CEB" bg="#EEF2FF" />
+          <KPITile icon={UserCheck}  label="Surveyed"        value={fmt(kpis.surveyed)}    sub={selectedPhase ? selectedPhase.name : 'All phases'} color="#059669" bg="#ECFDF5" />
+          <KPITile icon={TrendingUp} label="Response Rate"   value={`${kpis.rate}%`}       sub="Of registered voters"
+            color={kpis.rate >= 70 ? '#059669' : kpis.rate >= 40 ? '#D97706' : '#EF4444'}
+            bg={kpis.rate >= 70 ? '#ECFDF5' : kpis.rate >= 40 ? '#FFFBEB' : '#FEF2F2'} />
+          <KPITile icon={Activity}   label="Today"           value={fmt(kpis.today)}       sub="Submitted today"     color="#D97706" bg="#FFFBEB" />
+          <KPITile icon={BarChart2}  label="Male"            value={fmt(kpis.male)}        sub="Registered voters"   color="#5B5CEB" bg="#EEF2FF" />
+          <KPITile icon={BarChart2}  label="Female"          value={fmt(kpis.female)}      sub="Registered voters"   color="#EC4899" bg="#FDF2F8" />
+          <KPITile icon={BarChart2}  label="Other"           value={fmt(kpis.other)}       sub="Registered voters"   color="#94A3B8" bg="#F8FAFC" />
         </div>
 
         {loading ? (
@@ -641,17 +721,10 @@ export default function Reports() {
           </div>
         ) : (
           <>
-            {/* ── Timeline ───────────────────────────────────────────────────── */}
-            <Timeline responses={responses} />
-
-            {/* ── Demographics ───────────────────────────────────────────────── */}
-            <Demographics voters={voters} responses={responses} />
-
-            {/* ── Survey breakdown ───────────────────────────────────────────── */}
-            <SurveyBreakdown responses={responses} surveys={surveys} />
-
-            {/* ── Response list ──────────────────────────────────────────────── */}
-            <ResponseList responses={responses} surveys={surveys} />
+            <Timeline responses={filteredResponses} />
+            <Demographics voters={voters} responses={filteredResponses} />
+            <SurveyBreakdown responses={filteredResponses} surveys={surveys} />
+            <ResponseList responses={filteredResponses} surveys={surveys} />
           </>
         )}
       </div>
