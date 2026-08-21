@@ -9,8 +9,10 @@ import {
   uploadBoothsForImport, uploadVotersForBooths,
   saveImportMetaById, deleteBoothsAndVoters, deleteImportMetaById,
   clearBooths, clearVoters, deleteImportMeta,
+  getAllImportMetas,
 } from '../services/voterService'
 import { clearFsCache } from '../utils/fsCache'
+import { supabase } from '../supabase/config'
 import {
   cacheImportMetas, loadCachedImportMetas,
   loadCachedImportMeta,
@@ -132,7 +134,31 @@ export default function Voters() {
       }
     }
 
-    if (!metas.length) return
+    // If no local metas, try fetching from Supabase (new browser / different machine)
+    if (!metas.length) {
+      getAllImportMetas().then(async remoteMetas => {
+        if (!remoteMetas.length) return  // genuinely no data
+        cacheImportMetas(remoteMetas)
+        setImportMetas(remoteMetas)
+        const lastHeaders = remoteMetas[remoteMetas.length - 1]?.csvHeaders
+        if (lastHeaders) {
+          setCsvHeaders(lastHeaders)
+          setVisibleCols(new Set(lastHeaders.filter(h => h !== 'ADDRESS')))
+        }
+        setLoadStatus('loading')
+        // Fetch voters from Supabase and hydrate local cache
+        const { data } = await supabase.from('voters').select('id, boothNo, data').limit(200000)
+        if (data?.length) {
+          const tagged = data.map(r => ({ ...r.data, _id: r.id, _boothNo: r.boothNo }))
+          await mergeVoterCache(tagged, [...new Set(data.map(r => r.boothNo))])
+          setVoters(tagged)
+          setLoadStatus('ready')
+        } else {
+          setLoadStatus('idle')
+        }
+      }).catch(() => {})
+      return
+    }
 
     setImportMetas(metas)
     const lastHeaders = metas[metas.length - 1]?.csvHeaders
@@ -142,12 +168,21 @@ export default function Voters() {
     }
     setLoadStatus('loading')
 
-    loadCachedVoters().then(cached => {
+    loadCachedVoters().then(async cached => {
       if (cached.length > 0) {
         setVoters(cached)
         setLoadStatus('ready')
       } else {
-        setLoadStatus('idle')
+        // Metas exist locally but IndexedDB was cleared — refetch voters from Supabase
+        const { data } = await supabase.from('voters').select('id, boothNo, data').limit(200000)
+        if (data?.length) {
+          const tagged = data.map(r => ({ ...r.data, _id: r.id, _boothNo: r.boothNo }))
+          await mergeVoterCache(tagged, [...new Set(data.map(r => r.boothNo))])
+          setVoters(tagged)
+          setLoadStatus('ready')
+        } else {
+          setLoadStatus('idle')
+        }
       }
     }).catch(() => setLoadStatus('idle'))
   }, [])
