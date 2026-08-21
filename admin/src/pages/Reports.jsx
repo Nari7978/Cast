@@ -239,16 +239,21 @@ function Demographics({ voters, responses }) {
       else if (age > 60)               ages['60+']++
     })
 
-    // Responded counts from response data
+    // Build voter lookup by id so we can join with responses
+    const voterMap = {}
+    voters.forEach(v => { if (v.id) voterMap[v.id] = v.data || {} })
+
+    // Responded counts — only count when gender/age is actually known
     let rMale = 0, rFemale = 0, rOther = 0
     const rAges = { '18–25': 0, '26–35': 0, '36–45': 0, '46–60': 0, '60+': 0 }
 
     responses.forEach(r => {
-      const vd  = r.voterData || {}
-      const g   = getGender(vd)
+      const vd = voterMap[r.voterId] || {}
+      const g  = getGender(vd)
       if (isMale(g)) rMale++
       else if (isFemale(g)) rFemale++
-      else rOther++
+      else if (isOther(g)) rOther++
+      // else: no gender data — skip, don't count as Other
 
       const age = getAge(vd)
       if (age >= 18 && age <= 25)      rAges['18–25']++
@@ -611,7 +616,7 @@ export default function Reports() {
       setLoading(true)
       if (selected) {
         const [vRes, rRes] = await Promise.all([
-          supabase.from('voters').select('data').eq('boothNo', String(selected.boothNo)),
+          supabase.from('voters').select('id, data').eq('boothNo', String(selected.boothNo)),
           supabase.from('responses').select('data, inserted_at')
             .filter('data->>boothNo', 'eq', String(selected.boothNo))
             .order('inserted_at', { ascending: false }),
@@ -620,7 +625,7 @@ export default function Reports() {
         setResponses((rRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at })))
       } else {
         const [vRes, rRes] = await Promise.all([
-          supabase.from('voters').select('data').limit(100000),
+          supabase.from('voters').select('id, data').limit(100000),
           supabase.from('responses').select('data, inserted_at').order('inserted_at', { ascending: false }),
         ])
         setVoters(vRes.data || [])
