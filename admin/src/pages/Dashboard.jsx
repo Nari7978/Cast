@@ -38,7 +38,7 @@ export default function Dashboard() {
       supabase.from('phases').select('data, inserted_at').order('inserted_at', { ascending: false }),
       supabase.from('assignments').select('data, inserted_at').order('inserted_at', { ascending: false }),
       supabase.from('responses').select('data, inserted_at').order('inserted_at', { ascending: true }),
-      supabase.from('voters').select('boothNo, data', { count: 'exact' }).limit(100000),
+      supabase.from('voters').select('*', { count: 'exact', head: true }),
     ])
 
     const booths      = boothsRes.data || []
@@ -47,8 +47,7 @@ export default function Dashboard() {
     const phases      = (phasesRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
     const assignments = (assignmentsRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
     const responses   = (responsesRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
-    const voters      = votersRes.data || []
-    const voterCount  = votersRes.count ?? voters.length
+    const voterCount  = votersRes.count ?? 0
 
     const latestPhase   = phases[0] || null
     const activeAgents  = agents.filter(a => a.status === 'Active').length
@@ -70,15 +69,16 @@ export default function Dashboard() {
     // ── Voter demographics ─────────────────────────────────────────────────
     const totalVoters = voterCount || booths.reduce((sum, b) => sum + (b.voterCount || 0), 0)
 
+    // Use responses for gender/age breakdown (small dataset, avoids loading 2L voter rows)
     let maleCount = 0, femaleCount = 0, otherCount = 0
     const ageBuckets = { '18–25': 0, '26–35': 0, '36–45': 0, '46–60': 0, '60+': 0 }
 
-    voters.forEach(v => {
-      const g = getGender(v.data)
+    responses.forEach(r => {
+      const g = getGender(r)
       if (isMale(g))        maleCount++
       else if (isFemale(g)) femaleCount++
       else if (isOther(g))  otherCount++
-      const age = getAge(v.data)
+      const age = getAge(r)
       if (age >= 18 && age <= 25)      ageBuckets['18–25']++
       else if (age >= 26 && age <= 35) ageBuckets['26–35']++
       else if (age >= 36 && age <= 45) ageBuckets['36–45']++
