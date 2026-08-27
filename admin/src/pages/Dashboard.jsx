@@ -66,25 +66,30 @@ export default function Dashboard() {
     const sixtyMinAgo = Date.now() - 60 * 60 * 1000
     const velocity = responses.filter(r => r.submittedAt && new Date(r.submittedAt).getTime() >= sixtyMinAgo).length
 
-    // ── Voter demographics ─────────────────────────────────────────────────
+    // ── Voter demographics — count queries (no row fetch, scales to 2L+) ──────
     const totalVoters = voterCount || booths.reduce((sum, b) => sum + (b.voterCount || 0), 0)
 
-    // Use responses for gender/age breakdown (small dataset, avoids loading 2L voter rows)
-    let maleCount = 0, femaleCount = 0, otherCount = 0
-    const ageBuckets = { '18–25': 0, '26–35': 0, '36–45': 0, '46–60': 0, '60+': 0 }
+    const [maleRes, femaleRes, otherRes, a1825, a2635, a3645, a4660, a60p] = await Promise.all([
+      supabase.from('voters').select('*', { count: 'exact', head: true }).in('data->>gender', ['MALE','Male','M','पुरुष','male']),
+      supabase.from('voters').select('*', { count: 'exact', head: true }).in('data->>gender', ['FEMALE','Female','F','महिला','female']),
+      supabase.from('voters').select('*', { count: 'exact', head: true }).in('data->>gender', ['OTHER','Other','O','तृतीय लिंग','other']),
+      supabase.from('voters').select('*', { count: 'exact', head: true }).gte('data->>age', '18').lte('data->>age', '25'),
+      supabase.from('voters').select('*', { count: 'exact', head: true }).gte('data->>age', '26').lte('data->>age', '35'),
+      supabase.from('voters').select('*', { count: 'exact', head: true }).gte('data->>age', '36').lte('data->>age', '45'),
+      supabase.from('voters').select('*', { count: 'exact', head: true }).gte('data->>age', '46').lte('data->>age', '60'),
+      supabase.from('voters').select('*', { count: 'exact', head: true }).gte('data->>age', '61'),
+    ])
 
-    responses.forEach(r => {
-      const g = getGender(r)
-      if (isMale(g))        maleCount++
-      else if (isFemale(g)) femaleCount++
-      else if (isOther(g))  otherCount++
-      const age = getAge(r)
-      if (age >= 18 && age <= 25)      ageBuckets['18–25']++
-      else if (age >= 26 && age <= 35) ageBuckets['26–35']++
-      else if (age >= 36 && age <= 45) ageBuckets['36–45']++
-      else if (age >= 46 && age <= 60) ageBuckets['46–60']++
-      else if (age > 60)               ageBuckets['60+']++
-    })
+    const maleCount   = maleRes.count   || 0
+    const femaleCount = femaleRes.count  || 0
+    const otherCount  = otherRes.count   || 0
+    const ageBuckets  = {
+      '18–25': a1825.count || 0,
+      '26–35': a2635.count || 0,
+      '36–45': a3645.count || 0,
+      '46–60': a4660.count || 0,
+      '60+':   a60p.count  || 0,
+    }
 
     const genderTotal = maleCount + femaleCount + otherCount || 1
     const genderData = [
