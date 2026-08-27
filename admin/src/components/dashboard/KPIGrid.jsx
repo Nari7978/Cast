@@ -3,8 +3,6 @@ import { Users, Zap, TrendingUp, Activity, UserCheck, Loader2 } from 'lucide-rea
 
 function fmt(n) {
   if (n === null || n === undefined) return '—'
-  if (n >= 100000) return (n / 100000).toFixed(1) + 'L'
-  if (n >= 1000)   return (n / 1000).toFixed(1) + 'K'
   return n.toLocaleString()
 }
 

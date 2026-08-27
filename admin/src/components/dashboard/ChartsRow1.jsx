@@ -48,7 +48,7 @@ function ResponseTrend({ stats }) {
         </div>
         <div className="text-right">
           <p className="text-[11px] text-slate-400">Total collected</p>
-          <p className="text-[20px] font-extrabold text-slate-900 leading-tight">{total >= 1000 ? (total/1000).toFixed(1)+'K' : total}</p>
+          <p className="text-[20px] font-extrabold text-slate-900 leading-tight">{total.toLocaleString()}</p>
         </div>
       </div>
 
