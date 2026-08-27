@@ -67,7 +67,7 @@ export default function Dashboard() {
     const velocity = responses.filter(r => r.submittedAt && new Date(r.submittedAt).getTime() >= sixtyMinAgo).length
 
     // ── Voter demographics ─────────────────────────────────────────────────
-    const totalVoters = booths.reduce((sum, b) => sum + (b.voterCount || 0), 0) || voters.length
+    const totalVoters = voters.length || booths.reduce((sum, b) => sum + (b.voterCount || 0), 0)
 
     let maleCount = 0, femaleCount = 0, otherCount = 0
     const ageBuckets = { '18–25': 0, '26–35': 0, '36–45': 0, '46–60': 0, '60+': 0 }
