@@ -15,6 +15,7 @@ function timeAgo(dateStr) {
 function VoterDemographics({ stats }) {
   const genderData = stats?.genderData || []
   const ageData    = stats?.ageData    || []
+  const hasVoters  = (stats?.totalVoters || 0) > 0
   const hasData    = genderData.some(g => g.value > 0)
 
   const genderColors = { Male: '#5B5CEB', Female: '#EC4899', Other: '#94A3B8' }
@@ -27,7 +28,9 @@ function VoterDemographics({ stats }) {
 
       {!hasData ? (
         <div className="flex items-center justify-center h-[200px]">
-          <p className="text-slate-300 text-[13px]">Upload voters to see demographics</p>
+          <p className="text-slate-300 text-[13px]">
+            {hasVoters ? 'Collect responses to see demographics' : 'Upload voters to see demographics'}
+          </p>
         </div>
       ) : (
         <div className="space-y-5">
