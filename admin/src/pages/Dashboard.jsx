@@ -38,7 +38,7 @@ export default function Dashboard() {
       supabase.from('phases').select('data, inserted_at').order('inserted_at', { ascending: false }),
       supabase.from('assignments').select('data, inserted_at').order('inserted_at', { ascending: false }),
       supabase.from('responses').select('data, inserted_at').order('inserted_at', { ascending: true }),
-      supabase.from('voters').select('boothNo, data').limit(100000),
+      supabase.from('voters').select('boothNo, data', { count: 'exact' }).limit(100000),
     ])
 
     const booths      = boothsRes.data || []
@@ -48,6 +48,7 @@ export default function Dashboard() {
     const assignments = (assignmentsRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
     const responses   = (responsesRes.data || []).map(r => ({ ...r.data, inserted_at: r.inserted_at }))
     const voters      = votersRes.data || []
+    const voterCount  = votersRes.count ?? voters.length
 
     const latestPhase   = phases[0] || null
     const activeAgents  = agents.filter(a => a.status === 'Active').length
@@ -67,7 +68,7 @@ export default function Dashboard() {
     const velocity = responses.filter(r => r.submittedAt && new Date(r.submittedAt).getTime() >= sixtyMinAgo).length
 
     // ── Voter demographics ─────────────────────────────────────────────────
-    const totalVoters = voters.length || booths.reduce((sum, b) => sum + (b.voterCount || 0), 0)
+    const totalVoters = voterCount || booths.reduce((sum, b) => sum + (b.voterCount || 0), 0)
 
     let maleCount = 0, femaleCount = 0, otherCount = 0
     const ageBuckets = { '18–25': 0, '26–35': 0, '36–45': 0, '46–60': 0, '60+': 0 }
