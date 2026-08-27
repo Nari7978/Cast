@@ -86,6 +86,21 @@ function CloudBadge({ status, errorMsg }) {
   )
 }
 
+// Fetch all voters from Supabase using pagination (bypasses 1000 row limit)
+async function fetchAllVotersFromSupabase() {
+  const PAGE = 1000
+  let all = [], from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('voters').select('id, boothNo, data').range(from, from + PAGE - 1)
+    if (error) throw error
+    all = all.concat(data || [])
+    if (!data || data.length < PAGE) break
+    from += PAGE
+  }
+  return all
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Voters() {
@@ -147,7 +162,7 @@ export default function Voters() {
         }
         setLoadStatus('loading')
         // Fetch voters from Supabase and hydrate local cache
-        const { data } = await supabase.from('voters').select('id, boothNo, data').limit(200000)
+        const data = await fetchAllVotersFromSupabase()
         if (data?.length) {
           const tagged = data.map(r => ({ ...r.data, _id: r.id, _boothNo: r.boothNo }))
           await mergeVoterCache(tagged, [...new Set(data.map(r => r.boothNo))])
@@ -174,7 +189,7 @@ export default function Voters() {
         setLoadStatus('ready')
       } else {
         // Metas exist locally but IndexedDB was cleared — refetch voters from Supabase
-        const { data } = await supabase.from('voters').select('id, boothNo, data').limit(200000)
+        const data = await fetchAllVotersFromSupabase()
         if (data?.length) {
           const tagged = data.map(r => ({ ...r.data, _id: r.id, _boothNo: r.boothNo }))
           await mergeVoterCache(tagged, [...new Set(data.map(r => r.boothNo))])
