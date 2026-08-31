@@ -26,10 +26,10 @@ function MenuItem({ icon, label, onPress, danger = false, rightText }) {
 
 export default function ProfileScreen() {
   const insets  = useSafeAreaInsets()
-  const { agent, logout, responses, pendingResponses } = useStore()
+  const { agent, logout, responses, pendingResponses, voters } = useStore()
 
   const pending = pendingResponses.filter(r => !r.synced).length
-  const total   = Object.values(responses).filter(r => r.submittedAt).length
+  const total   = voters.filter(v => responses[v.id]?.submittedAt).length
 
   const confirmLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -51,7 +51,11 @@ export default function ProfileScreen() {
         <Text style={styles.agentSub}>{agent?.mobile || '—'}</Text>
         <View style={styles.boothBadge}>
           <Ionicons name="location" size={12} color={theme.primary} />
-          <Text style={styles.boothText}>Booth {agent?.boothNo || '—'}</Text>
+          <Text style={styles.boothText}>
+            {agent?.boothNos?.length > 1
+              ? `Booths ${agent.boothNos.join(', ')}`
+              : `Booth ${agent?.boothNo || '—'}`}
+          </Text>
         </View>
       </LinearGradient>
 
@@ -76,8 +80,10 @@ export default function ProfileScreen() {
           {[
             { label: 'Full Name',       value: agent?.name     || '—' },
             { label: 'Mobile',          value: agent?.mobile   || '—' },
-            { label: 'Booth Number',    value: `Booth ${agent?.boothNo || '—'}` },
-            { label: 'Polling Station', value: agent?.station  || '—' },
+            { label: 'Booth Number',    value: agent?.boothNos?.length > 1 ? agent.boothNos.map(bn => `Booth ${bn}`).join(', ') : `Booth ${agent?.boothNo || '—'}` },
+            { label: 'Polling Station', value: agent?.boothNos?.length > 1
+                ? agent.boothNos.map((bn, i) => agent.boothNames?.[i] || (i === 0 ? agent.station : bn)).join(', ')
+                : (agent?.station || '—') },
             { label: 'Phase',           value: agent?.phase    || '—' },
             { label: 'Status',          value: agent?.status   || '—' },
           ].map(({ label, value }) => (

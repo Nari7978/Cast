@@ -234,14 +234,18 @@ export async function fetchActiveSurveyData(boothNo) {
 
   const activePhase = phases.find(p => p.status === 'Active') || phases[0] || null
 
+  // boothNo can be a single value or array — check all assigned booths
+  const boothArr = boothNo
+    ? (Array.isArray(boothNo) ? boothNo.map(String) : [String(boothNo)])
+    : []
+
   let activeSurvey = null
-  if (activePhase && boothNo) {
-    // Precise: find an Active assignment for this phase that covers this booth
+  if (activePhase && boothArr.length) {
     const assignment = assignments.find(a =>
       a.phaseId === activePhase.id &&
       a.status === 'Active' &&
       Array.isArray(a.boothNos) &&
-      a.boothNos.includes(String(boothNo))
+      boothArr.some(bn => a.boothNos.includes(bn))
     )
     if (assignment?.formId) {
       activeSurvey = surveys.find(s => s.id === assignment.formId) || null
