@@ -152,9 +152,10 @@ export default function HomeScreen() {
               <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.7)" />
               <Text style={styles.surveyCardMetaText} numberOfLines={2}>
                 {agent?.boothNos?.length > 1
-                  ? agent.boothNos.map((bn, i) =>
-                      `Booth ${bn}${agent.boothNames?.[i] ? ' · ' + agent.boothNames[i] : ''}`
-                    ).join('  |  ')
+                  ? agent.boothNos.map((bn, i) => {
+                      const name = agent.boothNames?.[i] || (i === 0 ? agent.station : '')
+                      return `Booth ${bn}${name ? ' · ' + name : ''}`
+                    }).join('  |  ')
                   : `Booth ${agent?.boothNo}${agent?.station ? ' · ' + agent.station : ''}`}
                 {activePhase?.name ? `  ·  ${activePhase.name}` : ''}
               </Text>
