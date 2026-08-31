@@ -110,11 +110,16 @@ export function startRealtimeSync(boothNo) {
     })
 
     // Another agent in same booth submitted a survey response
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'responses' }, () => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'responses' }, (payload) => {
       const { activeSurvey, mergeServerResponses } = useStore.getState()
-      fetchBoothResponses(boothNo, activeSurvey?.id)
-        .then(mergeServerResponses)
-        .catch(() => {})
+      const r = payload?.new
+      if (r?.data && String(r.data.boothNo) === String(boothNo)) {
+        mergeServerResponses([{ ...r.data, localId: r.id }])
+      } else {
+        fetchBoothResponses(boothNo, activeSurvey?.id)
+          .then(mergeServerResponses)
+          .catch(() => {})
+      }
     })
 
     .subscribe()
@@ -184,9 +189,12 @@ export async function fetchBoothResponses(boothNo, surveyId) {
     const { data, error } = await supabase
       .from('responses')
       .select('id, data')
-      .eq('data->>boothNo', String(boothNo))
+      .limit(2000)
     if (error) return []
-    const rows = (data || []).map(r => ({ ...r.data, localId: r.id }))
+    const boothStr = String(boothNo)
+    const rows = (data || [])
+      .map(r => ({ ...r.data, localId: r.id }))
+      .filter(r => String(r.boothNo) === boothStr)
     return surveyId ? rows.filter(r => r.surveyId === surveyId) : rows
   } catch (_) { return [] }
 }
