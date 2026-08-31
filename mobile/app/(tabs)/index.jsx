@@ -132,10 +132,10 @@ export default function HomeScreen() {
           </View>
           <View style={styles.boothBadge}>
             <Ionicons name="location" size={12} color={theme.primary} />
-            <Text style={styles.boothBadgeText}>
+            <Text style={styles.boothBadgeText} numberOfLines={1}>
               {agent?.boothNos?.length > 1
                 ? `Booths ${agent.boothNos.join(', ')}`
-                : `Booth ${agent?.boothNo || '—'}`}
+                : `Booth ${agent?.boothNo || '—'}${agent?.station ? ' · ' + agent.station : ''}`}
             </Text>
           </View>
         </View>
@@ -150,12 +150,13 @@ export default function HomeScreen() {
             <Text style={styles.surveyCardName}>{activeSurvey.name || activeSurvey.title || 'Door-to-Door Survey'}</Text>
             <View style={styles.surveyCardMeta}>
               <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.surveyCardMetaText}>
+              <Text style={styles.surveyCardMetaText} numberOfLines={2}>
                 {agent?.boothNos?.length > 1
-                  ? `Booths ${agent.boothNos.join(', ')}`
-                  : `Booth ${agent?.boothNo}`}
-                {agent?.station ? ` · ${agent.station}` : ''}
-                {activePhase?.name ? ` · ${activePhase.name}` : ''}
+                  ? agent.boothNos.map((bn, i) =>
+                      `Booth ${bn}${agent.boothNames?.[i] ? ' · ' + agent.boothNames[i] : ''}`
+                    ).join('  |  ')
+                  : `Booth ${agent?.boothNo}${agent?.station ? ' · ' + agent.station : ''}`}
+                {activePhase?.name ? `  ·  ${activePhase.name}` : ''}
               </Text>
             </View>
           </View>

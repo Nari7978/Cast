@@ -118,7 +118,12 @@ export default function SurveyVotersScreen() {
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={styles.surveyName}>{activeSurvey?.name || activeSurvey?.title || 'Survey'}</Text>
-            <Text style={styles.boothText}>Booth {agent?.boothNo} · {activePhase?.name || 'Active Phase'}</Text>
+            <Text style={styles.boothText} numberOfLines={1}>
+              {agent?.boothNos?.length > 1
+                ? `Booths ${agent.boothNos.join(', ')}`
+                : `Booth ${agent?.boothNo}${agent?.station ? ' · ' + agent.station : ''}`}
+              {' · '}{activePhase?.name || 'Active Phase'}
+            </Text>
           </View>
         </View>
 

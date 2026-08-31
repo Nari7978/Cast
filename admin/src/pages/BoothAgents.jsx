@@ -233,6 +233,7 @@ function AgentForm({ editingAgent, agents, booths, phases, onClose, onSave }) {
       ...form,
       boothNos: form.boothNos,
       boothNo: form.boothNos[0] || '',
+      boothNames: selectedBooths.map(b => b.pollingStation || ''),
       station: primaryBooth?.pollingStation || '',
     }
     onSave(editingAgent ? { id: editingAgent.id, ...data } : data)
