@@ -23,6 +23,16 @@ export function invalidateVoterCache(boothNo) {
   else Object.keys(_voterCache).forEach(k => delete _voterCache[k])
 }
 
+export const getBoothNos = agent =>
+  Array.isArray(agent?.boothNos) && agent.boothNos.length > 0
+    ? agent.boothNos.map(String)
+    : agent?.boothNo ? [String(agent.boothNo)] : []
+
+export async function fetchVotersForBooths(boothNos, opts = {}) {
+  const results = await Promise.all(boothNos.map(b => fetchVotersForBooth(b, opts)))
+  return results.flat()
+}
+
 let realtimeChannel = null
 
 export function startSyncListener() {
@@ -42,7 +52,10 @@ export function stopSyncListener() {
   }
 }
 
-export function startRealtimeSync(boothNo) {
+export function startRealtimeSync(boothNos) {
+  const boothArr = Array.isArray(boothNos) ? boothNos.map(String) : [String(boothNos)]
+  const primaryBooth = boothArr[0]
+
   // Tear down any existing (possibly dead) channel before resubscribing
   if (realtimeChannel) {
     supabase.removeChannel(realtimeChannel)
@@ -55,7 +68,7 @@ export function startRealtimeSync(boothNo) {
     // Phase activated/changed by admin
     .on('postgres_changes', { event: '*', schema: 'public', table: 'phases' }, () => {
       invalidateSurveyCache()
-      fetchActiveSurveyData(boothNo).then(res => {
+      fetchActiveSurveyData(primaryBooth).then(res => {
         const { setActiveSurvey, setActivePhase } = useStore.getState()
         setActiveSurvey(res.activeSurvey)
         setActivePhase(res.activePhase)
@@ -65,46 +78,35 @@ export function startRealtimeSync(boothNo) {
     // Survey updated by admin
     .on('postgres_changes', { event: '*', schema: 'public', table: 'surveys' }, () => {
       invalidateSurveyCache()
-      fetchActiveSurveyData(boothNo).then(res => {
+      fetchActiveSurveyData(primaryBooth).then(res => {
         const { setActiveSurvey, setActivePhase } = useStore.getState()
         setActiveSurvey(res.activeSurvey)
         setActivePhase(res.activePhase)
       }).catch(() => {})
     })
 
-    // Assignment created/changed by admin (new survey assigned to this booth)
+    // Assignment created/changed by admin
     .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, () => {
       invalidateSurveyCache()
-      fetchActiveSurveyData(boothNo).then(res => {
+      fetchActiveSurveyData(primaryBooth).then(res => {
         const { setActiveSurvey, setActivePhase } = useStore.getState()
         setActiveSurvey(res.activeSurvey)
         setActivePhase(res.activePhase)
       }).catch(() => {})
     })
 
-    // Voters added/updated for this booth
-    .on('postgres_changes', {
-      event: '*', schema: 'public', table: 'voters',
-      filter: `boothNo=eq.${boothNo}`,
-    }, () => {
-      fetchVotersForBooth(boothNo).then(voters => {
+    // Voters added/updated — no server-side filter so multi-booth works
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'voters' }, payload => {
+      const boothSet = new Set(boothArr)
+      if (payload?.new?.boothNo && !boothSet.has(String(payload.new.boothNo))) return
+      fetchVotersForBooths(boothArr).then(voters => {
         useStore.getState().setVoters(voters)
-      }).catch(() => {})
-    })
-
-    // Assignment created/changed by admin (new survey deployed to booths)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, () => {
-      invalidateSurveyCache()
-      fetchActiveSurveyData(boothNo).then(res => {
-        const { setActiveSurvey, setActivePhase } = useStore.getState()
-        setActiveSurvey(res.activeSurvey)
-        setActivePhase(res.activePhase)
       }).catch(() => {})
     })
 
     // Voting Day Poll activated/changed by admin
     .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, () => {
-      fetchActivePoll(boothNo).then(poll => {
+      fetchActivePoll(primaryBooth).then(poll => {
         useStore.getState().setActivePoll(poll)
       }).catch(() => {})
     })
@@ -113,10 +115,11 @@ export function startRealtimeSync(boothNo) {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'responses' }, (payload) => {
       const { activeSurvey, mergeServerResponses } = useStore.getState()
       const r = payload?.new
-      if (r?.data && String(r.data.boothNo) === String(boothNo)) {
+      const boothSet = new Set(boothArr)
+      if (r?.data && boothSet.has(String(r.data.boothNo))) {
         mergeServerResponses([{ ...r.data, localId: r.id }])
       } else {
-        fetchBoothResponses(boothNo, activeSurvey?.id)
+        fetchBoothResponses(boothArr, activeSurvey?.id)
           .then(mergeServerResponses)
           .catch(() => {})
       }
@@ -183,18 +186,20 @@ export async function syncPendingPolls() {
   pollSyncing = false
 }
 
-// ── Fetch all responses for a booth (for cross-agent status sync) ──────────────
-export async function fetchBoothResponses(boothNo, surveyId) {
+// ── Fetch all responses for one or more booths (for cross-agent status sync) ───
+export async function fetchBoothResponses(boothNos, surveyId) {
+  const boothSet = new Set(
+    Array.isArray(boothNos) ? boothNos.map(String) : [String(boothNos)]
+  )
   try {
     const { data, error } = await supabase
       .from('responses')
       .select('id, data')
       .limit(2000)
     if (error) return []
-    const boothStr = String(boothNo)
     const rows = (data || [])
       .map(r => ({ ...r.data, localId: r.id }))
-      .filter(r => String(r.boothNo) === boothStr)
+      .filter(r => boothSet.has(String(r.boothNo)))
     return surveyId ? rows.filter(r => r.surveyId === surveyId) : rows
   } catch (_) { return [] }
 }

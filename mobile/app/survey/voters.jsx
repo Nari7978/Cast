@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
-import { fetchBoothResponses } from '../../src/services/sync'
+import { fetchBoothResponses, getBoothNos } from '../../src/services/sync'
 
 const STATUS_CFG = {
   completed:   { label: 'Done',        color: theme.success,  bg: theme.successLight, icon: 'checkmark-circle' },
@@ -68,8 +68,10 @@ export default function SurveyVotersScreen() {
   const [activeFilter, setActiveFilter] = useState('All')
 
   useEffect(() => {
+    const boothNos = getBoothNos(agent)
+    if (!boothNos.length) return
     const { mergeServerResponses } = useStore.getState()
-    fetchBoothResponses(agent?.boothNo, activeSurvey?.id)
+    fetchBoothResponses(boothNos, activeSurvey?.id)
       .then(mergeServerResponses)
       .catch(() => {})
   }, [])

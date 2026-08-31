@@ -8,8 +8,8 @@ import { useStore } from '../src/store/useStore'
 import {
   startSyncListener, stopSyncListener,
   startRealtimeSync, stopRealtimeSync,
-  fetchVotersForBooth, fetchActiveSurveyData, fetchActivePoll,
-  fetchBoothResponses, syncPending, syncPendingPolls,
+  fetchVotersForBooths, fetchActiveSurveyData, fetchActivePoll,
+  fetchBoothResponses, syncPending, syncPendingPolls, getBoothNos,
 } from '../src/services/sync'
 
 function AuthGuard() {
@@ -32,21 +32,23 @@ function AuthGuard() {
   // This means even if agent arrives a tick after isAuthenticated, fetches still run.
   useEffect(() => {
     if (!isAuthenticated || !agent?.boothNo) return
+    const boothNos = getBoothNos(agent)
+    const primaryBooth = boothNos[0]
     const { setVoters, setActiveSurvey, setActivePhase, setActivePoll, loadPending, loadPendingPolls } = useStore.getState()
     loadPending()
     loadPendingPolls()
     startSyncListener()
-    fetchVotersForBooth(agent.boothNo).then(setVoters).catch(() => {})
-    fetchActiveSurveyData(agent.boothNo)
+    fetchVotersForBooths(boothNos).then(setVoters).catch(() => {})
+    fetchActiveSurveyData(primaryBooth)
       .then(res => {
         setActiveSurvey(res.activeSurvey)
         setActivePhase(res.activePhase)
-        return fetchBoothResponses(agent.boothNo, res.activeSurvey?.id)
+        return fetchBoothResponses(boothNos, res.activeSurvey?.id)
       })
       .then(serverResponses => useStore.getState().mergeServerResponses(serverResponses))
       .catch(() => {})
-    fetchActivePoll(agent.boothNo).then(setActivePoll).catch(() => {})
-    startRealtimeSync(agent.boothNo)
+    fetchActivePoll(primaryBooth).then(setActivePoll).catch(() => {})
+    startRealtimeSync(boothNos)
   }, [isAuthenticated, agent?.boothNo])
 
   // ── Logout cleanup ───────────────────────────────────────────────────────────
@@ -66,19 +68,19 @@ function AuthGuard() {
       if (nextState === 'active' && wasBackground) {
         const { agent, setVoters, setActiveSurvey, setActivePhase, setActivePoll } = useStore.getState()
         if (!agent?.boothNo) return
-        // Reconnect realtime (startRealtimeSync will tear down the old channel first)
-        startRealtimeSync(agent.boothNo)
-        // Refresh data that may have changed while backgrounded
-        fetchActiveSurveyData(agent.boothNo)
+        const boothNos = getBoothNos(agent)
+        const primaryBooth = boothNos[0]
+        startRealtimeSync(boothNos)
+        fetchActiveSurveyData(primaryBooth)
           .then(res => {
             setActiveSurvey(res.activeSurvey)
             setActivePhase(res.activePhase)
-            return fetchBoothResponses(agent.boothNo, res.activeSurvey?.id)
+            return fetchBoothResponses(boothNos, res.activeSurvey?.id)
           })
           .then(serverResponses => useStore.getState().mergeServerResponses(serverResponses))
           .catch(() => {})
-        fetchActivePoll(agent.boothNo).then(setActivePoll).catch(() => {})
-        fetchVotersForBooth(agent.boothNo).then(setVoters).catch(() => {})
+        fetchActivePoll(primaryBooth).then(setActivePoll).catch(() => {})
+        fetchVotersForBooths(boothNos).then(setVoters).catch(() => {})
         // Flush any offline queues
         syncPending()
         syncPendingPolls()

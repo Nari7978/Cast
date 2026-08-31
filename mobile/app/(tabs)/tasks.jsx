@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
-import { fetchActiveSurveyData, fetchBoothResponses, invalidateSurveyCache } from '../../src/services/sync'
+import { fetchActiveSurveyData, fetchBoothResponses, invalidateSurveyCache, getBoothNos } from '../../src/services/sync'
 
 const STATUS_CFG = {
   Active:    { color: theme.success,  bg: theme.successLight,  icon: 'play-circle',         label: 'Active'    },
@@ -98,8 +98,9 @@ export default function TasksScreen() {
       setLocalSurvey(res.activeSurvey || null)
       setActiveSurvey(res.activeSurvey)
       setActivePhase(res.activePhase)
-      if (agent?.boothNo) {
-        fetchBoothResponses(agent.boothNo, res.activeSurvey?.id)
+      const boothNos = getBoothNos(agent)
+      if (boothNos.length) {
+        fetchBoothResponses(boothNos, res.activeSurvey?.id)
           .then(useStore.getState().mergeServerResponses)
           .catch(() => {})
       }

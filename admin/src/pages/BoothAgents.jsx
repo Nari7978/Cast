@@ -11,7 +11,7 @@ import { fetchAllBooths } from '../services/voterService'
 import { subscribePhases } from '../services/phaseService'
 
 const generatePIN = () => String(Math.floor(1000 + Math.random() * 9000))
-const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', boothNo: '', phaseId: '', status: 'Active', notes: '', pin: generatePIN() }
+const EMPTY_FORM = { name: '', mobile: '', email: '', gender: 'Male', boothNos: [], phaseId: '', status: 'Active', notes: '', pin: generatePIN() }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -155,7 +155,11 @@ function AgentDrawer({ agent, phases, onClose, onEdit }) {
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-3">Assignment</p>
             <div className="space-y-0">
               <Field label="Phase"           value={phaseName} />
-              <Field label="Booth"           value={`Booth ${agent.boothNo}`} />
+              <Field label="Booth(s)" value={
+                agent.boothNos?.length
+                  ? agent.boothNos.map(b => `Booth ${b}`).join(', ')
+                  : `Booth ${agent.boothNo}`
+              } />
               <Field label="Polling Station" value={agent.station} />
             </div>
           </div>
@@ -190,28 +194,35 @@ function AgentDrawer({ agent, phases, onClose, onEdit }) {
 // ── Agent Form Modal ──────────────────────────────────────────────────────────
 
 function AgentForm({ editingAgent, agents, booths, phases, onClose, onSave }) {
+  const initBoothNos = editingAgent
+    ? (editingAgent.boothNos?.length ? editingAgent.boothNos : (editingAgent.boothNo ? [editingAgent.boothNo] : []))
+    : []
   const [form, setForm] = useState(editingAgent
     ? { name: editingAgent.name, mobile: editingAgent.mobile, email: editingAgent.email,
         gender: editingAgent.gender,
-        boothNo: editingAgent.boothNo || '',
+        boothNos: initBoothNos,
         phaseId: editingAgent.phaseId || '',
         status: editingAgent.status, notes: editingAgent.notes || '',
         pin: editingAgent.pin || generatePIN() }
     : { ...EMPTY_FORM, pin: generatePIN() })
   const [errors, setErrors] = useState({})
 
-  const selectedBooth = booths.find(b => b.boothNo === form.boothNo)
-
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
 
-  const selectBooth = (boothNo) => setForm(f => ({ ...f, boothNo }))
+  const toggleBooth = (boothNo) => setForm(f => {
+    const already = f.boothNos.includes(boothNo)
+    return { ...f, boothNos: already ? f.boothNos.filter(b => b !== boothNo) : [...f.boothNos, boothNo] }
+  })
+
+  const selectedBooths = booths.filter(b => form.boothNos.includes(b.boothNo))
+  const primaryBooth = selectedBooths[0]
 
   const validate = () => {
     const e = {}
-    if (!form.name.trim())   e.name   = 'Full name is required'
-    if (!form.mobile.trim()) e.mobile = 'Mobile number is required'
+    if (!form.name.trim())        e.name  = 'Full name is required'
+    if (!form.mobile.trim())      e.mobile = 'Mobile number is required'
     if (!/^\d{10}$/.test(form.mobile.trim())) e.mobile = 'Enter a valid 10-digit mobile number'
-    if (!form.boothNo)       e.booth  = 'Select a booth'
+    if (!form.boothNos.length)    e.booth  = 'Select at least one booth'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -220,8 +231,9 @@ function AgentForm({ editingAgent, agents, booths, phases, onClose, onSave }) {
     if (!validate()) return
     const data = {
       ...form,
-      boothNo: form.boothNo,
-      station: selectedBooth?.pollingStation || '',
+      boothNos: form.boothNos,
+      boothNo: form.boothNos[0] || '',
+      station: primaryBooth?.pollingStation || '',
     }
     onSave(editingAgent ? { id: editingAgent.id, ...data } : data)
   }
@@ -284,26 +296,45 @@ function AgentForm({ editingAgent, agents, booths, phases, onClose, onSave }) {
               </div>
             </div>
 
-            {/* Booth (select first → Polling Station auto-fills) */}
+            {/* Booths (multi-select checkboxes) */}
             <div>
-              <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Booth <span className="text-red-400">*</span></label>
-              <select value={form.boothNo} onChange={e => selectBooth(e.target.value)} className={inputCls(errors.booth)}>
-                <option value="">Select booth...</option>
-                {booths.map(b => (
-                  <option key={b.boothNo} value={b.boothNo}>
-                    Booth {b.boothNo}{b.pollingStation ? ` – ${b.pollingStation}` : ''}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">
+                Booth(s) <span className="text-red-400">*</span>
+                {form.boothNos.length > 0 && (
+                  <span className="ml-2 text-[#5B5CEB] font-normal">{form.boothNos.length} selected</span>
+                )}
+              </label>
+              <div className={`rounded-xl border overflow-hidden ${errors.booth ? 'border-red-300' : 'border-slate-200'}`}>
+                <div className="max-h-40 overflow-y-auto divide-y divide-slate-100">
+                  {booths.map(b => (
+                    <label key={b.boothNo}
+                      className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-indigo-50/50 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={form.boothNos.includes(b.boothNo)}
+                        onChange={() => toggleBooth(b.boothNo)}
+                        className="accent-[#5B5CEB] w-4 h-4 flex-shrink-0"
+                      />
+                      <span className="text-[12px] text-slate-700">
+                        <span className="font-semibold">Booth {b.boothNo}</span>
+                        {b.pollingStation ? <span className="text-slate-400"> – {b.pollingStation}</span> : ''}
+                      </span>
+                    </label>
+                  ))}
+                  {booths.length === 0 && (
+                    <div className="px-3 py-4 text-[12px] text-slate-400 text-center">No booths available</div>
+                  )}
+                </div>
+              </div>
               {errors.booth && <p className="text-red-500 text-[11px] mt-1">{errors.booth}</p>}
             </div>
 
-            {/* Polling Station (auto-filled from booth selection) */}
+            {/* Polling Station (auto-filled from first selected booth) */}
             <div>
               <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Polling Station</label>
-              <div className={`flex items-center gap-2 w-full px-3 py-2.5 rounded-xl border text-[13px] ${selectedBooth ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-                <MapPin size={13} className={selectedBooth ? 'text-indigo-400' : 'text-slate-300'} />
-                <span>{selectedBooth ? selectedBooth.pollingStation : 'Auto-filled when you select a booth'}</span>
+              <div className={`flex items-center gap-2 w-full px-3 py-2.5 rounded-xl border text-[13px] ${primaryBooth ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                <MapPin size={13} className={primaryBooth ? 'text-indigo-400' : 'text-slate-300'} />
+                <span>{primaryBooth ? primaryBooth.pollingStation : 'Auto-filled from first selected booth'}</span>
               </div>
             </div>
 
@@ -555,13 +586,14 @@ export default function BoothAgents() {
                       <PINCell pin={agent.pin} />
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
-                        <span className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold"
-                          style={{ background: '#EEF2FF', color: '#5B5CEB' }}>
-                          {agent.boothNo}
-                        </span>
-                        {agent.boothName}
-                      </span>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {(agent.boothNos?.length ? agent.boothNos : (agent.boothNo ? [agent.boothNo] : [])).map(bn => (
+                          <span key={bn} className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold"
+                            style={{ background: '#EEF2FF', color: '#5B5CEB' }}>
+                            {bn}
+                          </span>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
                       <p className="text-slate-500 text-[12px] max-w-[180px] truncate">{agent.station}</p>

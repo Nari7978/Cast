@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
-import { fetchActiveSurveyData, fetchVotersForBooth, fetchBoothResponses, invalidateSurveyCache, reconcileResponses } from '../../src/services/sync'
+import { fetchActiveSurveyData, fetchVotersForBooths, fetchBoothResponses, invalidateSurveyCache, reconcileResponses, getBoothNos } from '../../src/services/sync'
 
 function KPICard({ label, value, color, bg, icon }) {
   return (
@@ -45,16 +45,18 @@ export default function HomeScreen() {
     setLoadError(false)
     try {
       if (force) invalidateSurveyCache()
+      const boothNos = getBoothNos(agent)
+      const primaryBooth = boothNos[0]
       const [{ activeSurvey: s, activePhase: p }, v] = await Promise.all([
-        fetchActiveSurveyData(agent?.boothNo),
-        agent?.boothNo ? fetchVotersForBooth(agent.boothNo) : Promise.resolve(null),
+        fetchActiveSurveyData(primaryBooth),
+        boothNos.length ? fetchVotersForBooths(boothNos) : Promise.resolve(null),
         reconcileResponses(),
       ])
       setActiveSurvey(s)
       setActivePhase(p)
       if (v) setVoters(v)
-      if (agent?.boothNo) {
-        fetchBoothResponses(agent.boothNo, s?.id)
+      if (boothNos.length) {
+        fetchBoothResponses(boothNos, s?.id)
           .then(useStore.getState().mergeServerResponses)
           .catch(() => {})
       }
