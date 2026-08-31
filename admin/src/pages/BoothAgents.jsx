@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import {
   Search, Plus, Upload, Download, X, Eye, EyeOff, Edit2, Trash2,
   Phone, ChevronLeft, ChevronRight,
-  AlertCircle, Users, UserCheck, UserX, MapPin, RefreshCw,
+  Users, UserCheck, UserX, MapPin, RefreshCw,
   Copy, Check, KeyRound,
 } from 'lucide-react'
 
@@ -202,11 +202,6 @@ function AgentForm({ editingAgent, agents, booths, phases, onClose, onSave }) {
 
   const selectedBooth = booths.find(b => b.boothNo === form.boothNo)
 
-  const isBoothTaken = (boothNo) =>
-    agents.some(a => a.boothNo === boothNo && a.status === 'Active' && a.id !== editingAgent?.id)
-
-  const takenBooth = form.boothNo && form.status === 'Active' && isBoothTaken(form.boothNo)
-
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
 
   const selectBooth = (boothNo) => setForm(f => ({ ...f, boothNo }))
@@ -217,7 +212,6 @@ function AgentForm({ editingAgent, agents, booths, phases, onClose, onSave }) {
     if (!form.mobile.trim()) e.mobile = 'Mobile number is required'
     if (!/^\d{10}$/.test(form.mobile.trim())) e.mobile = 'Enter a valid 10-digit mobile number'
     if (!form.boothNo)       e.booth  = 'Select a booth'
-    if (takenBooth)          e.booth  = 'This booth already has an assigned active agent'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -297,17 +291,11 @@ function AgentForm({ editingAgent, agents, booths, phases, onClose, onSave }) {
                 <option value="">Select booth...</option>
                 {booths.map(b => (
                   <option key={b.boothNo} value={b.boothNo}>
-                    Booth {b.boothNo}{b.pollingStation ? ` – ${b.pollingStation}` : ''}{isBoothTaken(b.boothNo) ? ' (Occupied)' : ''}
+                    Booth {b.boothNo}{b.pollingStation ? ` – ${b.pollingStation}` : ''}
                   </option>
                 ))}
               </select>
-              {takenBooth && (
-                <div className="mt-2 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                  <AlertCircle size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-amber-700 text-[11px]">This booth already has an assigned booth agent. Please select another booth or reassign the existing agent.</p>
-                </div>
-              )}
-              {errors.booth && !takenBooth && <p className="text-red-500 text-[11px] mt-1">{errors.booth}</p>}
+              {errors.booth && <p className="text-red-500 text-[11px] mt-1">{errors.booth}</p>}
             </div>
 
             {/* Polling Station (auto-filled from booth selection) */}
@@ -359,8 +347,8 @@ function AgentForm({ editingAgent, agents, booths, phases, onClose, onSave }) {
             <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-[#E8ECF4] text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
               Cancel
             </button>
-            <button onClick={handleSave} disabled={takenBooth}
-              className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-semibold disabled:opacity-50 hover:opacity-90 transition-opacity"
+            <button onClick={handleSave}
+              className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
               style={{ background: '#5B5CEB' }}>
               {editingAgent ? 'Save Changes' : 'Add Agent'}
             </button>
