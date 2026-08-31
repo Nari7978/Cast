@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
-import { fetchActiveSurveyData, invalidateSurveyCache } from '../../src/services/sync'
+import { fetchActiveSurveyData, fetchBoothResponses, invalidateSurveyCache } from '../../src/services/sync'
 
 const STATUS_CFG = {
   Active:    { color: theme.success,  bg: theme.successLight,  icon: 'play-circle',         label: 'Active'    },
@@ -79,7 +79,7 @@ function PhaseCard({ phase, survey, isActive, onPress, completedCount, totalCoun
 export default function TasksScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { agent, setActiveSurvey, setActivePhase, pendingResponses, voters } = useStore()
+  const { agent, setActiveSurvey, setActivePhase, responses, voters } = useStore()
   const [phases,          setPhases]          = useState([])
   const [surveys,         setSurveys]         = useState([])
   const [localSurvey,     setLocalSurvey]     = useState(null)
@@ -98,6 +98,11 @@ export default function TasksScreen() {
       setLocalSurvey(res.activeSurvey || null)
       setActiveSurvey(res.activeSurvey)
       setActivePhase(res.activePhase)
+      if (agent?.boothNo) {
+        fetchBoothResponses(agent.boothNo, res.activeSurvey?.id)
+          .then(useStore.getState().mergeServerResponses)
+          .catch(() => {})
+      }
     } catch (_) {
       setLoadErr(true)
     }
@@ -111,7 +116,7 @@ export default function TasksScreen() {
   const getSurvey = (phase) => surveys.find(s => s.id === phase.surveyId) || localSurvey
 
   const activeSurveyId = localSurvey?.id
-  const completedCount = pendingResponses.filter(r => r.submittedAt && (!activeSurveyId || r.surveyId === activeSurveyId)).length
+  const completedCount = voters.filter(v => responses[v.id]?.submittedAt).length
   const totalCount     = voters.length
 
   if (loading) {
