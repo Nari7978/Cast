@@ -9,7 +9,7 @@ import {
   startSyncListener, stopSyncListener,
   startRealtimeSync, stopRealtimeSync,
   fetchVotersForBooth, fetchActiveSurveyData, fetchActivePoll,
-  syncPending, syncPendingPolls,
+  fetchBoothResponses, syncPending, syncPendingPolls,
 } from '../src/services/sync'
 
 function AuthGuard() {
@@ -38,7 +38,12 @@ function AuthGuard() {
     startSyncListener()
     fetchVotersForBooth(agent.boothNo).then(setVoters).catch(() => {})
     fetchActiveSurveyData(agent.boothNo)
-      .then(res => { setActiveSurvey(res.activeSurvey); setActivePhase(res.activePhase) })
+      .then(res => {
+        setActiveSurvey(res.activeSurvey)
+        setActivePhase(res.activePhase)
+        return fetchBoothResponses(agent.boothNo, res.activeSurvey?.id)
+      })
+      .then(serverResponses => useStore.getState().mergeServerResponses(serverResponses))
       .catch(() => {})
     fetchActivePoll(agent.boothNo).then(setActivePoll).catch(() => {})
     startRealtimeSync(agent.boothNo)
@@ -65,7 +70,12 @@ function AuthGuard() {
         startRealtimeSync(agent.boothNo)
         // Refresh data that may have changed while backgrounded
         fetchActiveSurveyData(agent.boothNo)
-          .then(res => { setActiveSurvey(res.activeSurvey); setActivePhase(res.activePhase) })
+          .then(res => {
+            setActiveSurvey(res.activeSurvey)
+            setActivePhase(res.activePhase)
+            return fetchBoothResponses(agent.boothNo, res.activeSurvey?.id)
+          })
+          .then(serverResponses => useStore.getState().mergeServerResponses(serverResponses))
           .catch(() => {})
         fetchActivePoll(agent.boothNo).then(setActivePoll).catch(() => {})
         fetchVotersForBooth(agent.boothNo).then(setVoters).catch(() => {})

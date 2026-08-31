@@ -109,6 +109,14 @@ export function startRealtimeSync(boothNo) {
       }).catch(() => {})
     })
 
+    // Another agent in same booth submitted a survey response
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'responses' }, () => {
+      const { activeSurvey, mergeServerResponses } = useStore.getState()
+      fetchBoothResponses(boothNo, activeSurvey?.id)
+        .then(mergeServerResponses)
+        .catch(() => {})
+    })
+
     .subscribe()
 }
 
@@ -154,19 +162,33 @@ export async function syncPendingPolls() {
   if (pollSyncing) return
   pollSyncing = true
   try {
-    const { pendingPollResponses, markPollSynced } = useStore.getState()
+    const { pendingPollResponses, agent, markPollSynced } = useStore.getState()
     const unsynced = pendingPollResponses.filter(r => !r.synced)
     for (const r of unsynced) {
       const { error } = await supabase.from('poll_responses').insert({
-        pollId:     r.pollId,
-        option:     r.option,
-        boothNo:    r.boothNo,
+        pollId:    r.pollId,
+        option:    r.option,
+        boothNo:   r.boothNo,
+        agentName: r.agentName || agent?.name || null,
         recordedAt: r.recordedAt,
       })
       if (!error) await markPollSynced(r.localId)
     }
   } catch (_) {}
   pollSyncing = false
+}
+
+// ── Fetch all responses for a booth (for cross-agent status sync) ──────────────
+export async function fetchBoothResponses(boothNo, surveyId) {
+  try {
+    const { data, error } = await supabase
+      .from('responses')
+      .select('id, data')
+      .eq('data->>boothNo', String(boothNo))
+    if (error) return []
+    const rows = (data || []).map(r => ({ ...r.data, localId: r.id }))
+    return surveyId ? rows.filter(r => r.surveyId === surveyId) : rows
+  } catch (_) { return [] }
 }
 
 export async function fetchActiveSurveyData(boothNo) {

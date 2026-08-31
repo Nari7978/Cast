@@ -18,6 +18,11 @@ const OPTION_COLORS = [
   '#F59E0B', '#8B5CF6', '#EF4444', '#06B6D4',
 ]
 
+function timeLabel(dateStr) {
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+}
+
 export default function PollScreen() {
   const router  = useRouter()
   const top     = useSafeAreaInsets().top
@@ -27,6 +32,7 @@ export default function PollScreen() {
   const [submitting, setSubmitting] = useState(null)
   const [loading,    setLoading]    = useState(true)
   const [isOffline,  setIsOffline]  = useState(false)
+  const [liveEntries, setLiveEntries] = useState([])
 
   // Track network state
   useEffect(() => {
@@ -61,6 +67,20 @@ export default function PollScreen() {
   useEffect(() => {
     if (!activePoll) return
     fetchTally()
+    fetchFeed()
+
+    const boothStr = String(agent?.boothNo || '')
+    const channel = supabase
+      .channel(`poll-live-${activePoll.id}-${boothStr}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'poll_responses' }, (payload) => {
+        const r = payload.new
+        if (!r || r.pollId !== activePoll.id || r.boothNo !== boothStr) return
+        setLiveEntries(prev => [{ option: r.option, agentName: r.agentName, recordedAt: r.recordedAt }, ...prev].slice(0, 30))
+        fetchTally()
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
   }, [activePoll?.id])
 
   async function fetchTally() {
@@ -76,6 +96,19 @@ export default function PollScreen() {
       setCounts(tally)
     } catch (_) {}
     setLoading(false)
+  }
+
+  async function fetchFeed() {
+    try {
+      const { data } = await supabase
+        .from('poll_responses')
+        .select('option, agentName, recordedAt')
+        .eq('pollId', activePoll.id)
+        .eq('boothNo', String(agent?.boothNo || ''))
+        .order('recordedAt', { ascending: false })
+        .limit(30)
+      setLiveEntries(data || [])
+    } catch (_) {}
   }
 
   function playSuccess(idx, offline = false) {
@@ -132,6 +165,7 @@ export default function PollScreen() {
       pollId:     activePoll.id,
       option:     optionLabel,
       boothNo:    String(agent?.boothNo || ''),
+      agentName:  agent?.name || null,
       recordedAt: new Date().toISOString(),
       synced:     false,
     }
@@ -141,9 +175,10 @@ export default function PollScreen() {
 
     if (online) {
       const { error } = await supabase.from('poll_responses').insert({
-        pollId:     record.pollId,
-        option:     record.option,
-        boothNo:    record.boothNo,
+        pollId:    record.pollId,
+        option:    record.option,
+        boothNo:   record.boothNo,
+        agentName: record.agentName,
         recordedAt: record.recordedAt,
       })
       if (error) await savePollResponse(record)
@@ -303,6 +338,27 @@ export default function PollScreen() {
           </View>
         )}
 
+        {/* Live activity feed */}
+        {liveEntries.length > 0 && (
+          <View style={styles.feedCard}>
+            <View style={styles.feedHeader}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#10B981' }} />
+              <Text style={styles.feedTitle}>Live Vote Feed</Text>
+            </View>
+            {liveEntries.map((entry, i) => (
+              <View key={i} style={[styles.feedRow, i < liveEntries.length - 1 && styles.feedRowBorder]}>
+                <View style={styles.feedDot} />
+                <Text style={styles.feedText} numberOfLines={1}>
+                  <Text style={styles.feedAgent}>{entry.agentName || 'Agent'} </Text>
+                  <Text style={styles.feedAction}>opted </Text>
+                  <Text style={styles.feedOption}>{entry.option}</Text>
+                </Text>
+                <Text style={styles.feedTime}>{timeLabel(entry.recordedAt)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
@@ -388,4 +444,23 @@ const styles = StyleSheet.create({
   totalRowLabel: { color: theme.textSub, fontSize: 13, fontWeight: '600' },
   totalRowSub:   { color: theme.textMuted, fontSize: 11, marginTop: 2 },
   totalRowValue: { color: theme.text, fontSize: 20, fontWeight: '900' },
+
+  feedCard: {
+    backgroundColor: theme.white, borderRadius: 14, marginTop: 10,
+    overflow: 'hidden', ...theme.shadowSm,
+  },
+  feedHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: theme.border,
+  },
+  feedTitle:  { fontSize: 12, fontWeight: '700', color: theme.textSub, letterSpacing: 0.4 },
+  feedRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10 },
+  feedRowBorder: { borderBottomWidth: 1, borderBottomColor: theme.border },
+  feedDot:    { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981', flexShrink: 0 },
+  feedText:   { flex: 1, fontSize: 12, color: theme.text },
+  feedAgent:  { fontWeight: '700' },
+  feedAction: { color: theme.textMuted },
+  feedOption: { fontWeight: '800', color: '#E11D48' },
+  feedTime:   { fontSize: 11, color: theme.textMuted, flexShrink: 0 },
 })

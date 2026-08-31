@@ -120,6 +120,17 @@ export const useStore = create((set, get) => ({
     return 'in_progress'
   },
 
+  // Merge server responses from other agents in same booth without overwriting local ones
+  mergeServerResponses: (serverResponses) => {
+    const { responses, activeSurvey } = get()
+    const surveyId = activeSurvey?.id
+    const merged = { ...responses }
+    serverResponses
+      .filter(r => r.voterId && (!surveyId || r.surveyId === surveyId))
+      .forEach(r => { if (!merged[r.voterId]) merged[r.voterId] = r })
+    set({ responses: merged })
+  },
+
   // ── Offline Poll Responses ────────────────────────────────────────────
   pendingPollResponses: [],
 
