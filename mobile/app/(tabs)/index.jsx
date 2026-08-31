@@ -150,14 +150,14 @@ export default function HomeScreen() {
             <Text style={styles.surveyCardName}>{activeSurvey.name || activeSurvey.title || 'Door-to-Door Survey'}</Text>
             <View style={styles.surveyCardMeta}>
               <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.surveyCardMetaText} numberOfLines={2}>
+              <Text style={styles.surveyCardMetaText} numberOfLines={3}>
                 {agent?.boothNos?.length > 1
                   ? agent.boothNos.map((bn, i) => {
                       const name = agent.boothNames?.[i] || (i === 0 ? agent.station : '')
                       return `Booth ${bn}${name ? ' · ' + name : ''}`
-                    }).join('  |  ')
+                    }).join('\n')
                   : `Booth ${agent?.boothNo}${agent?.station ? ' · ' + agent.station : ''}`}
-                {activePhase?.name ? `  ·  ${activePhase.name}` : ''}
+                {activePhase?.name ? `\n${activePhase.name}` : ''}
               </Text>
             </View>
           </View>

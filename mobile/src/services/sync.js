@@ -28,6 +28,19 @@ export const getBoothNos = agent =>
     ? agent.boothNos.map(String)
     : agent?.boothNo ? [String(agent.boothNo)] : []
 
+export async function fetchBoothNames(boothNos) {
+  try {
+    const { data, error } = await supabase
+      .from('booths')
+      .select('boothNo, pollingStation')
+      .in('boothNo', boothNos.map(String))
+    if (error || !data) return {}
+    const map = {}
+    data.forEach(b => { map[String(b.boothNo)] = b.pollingStation || '' })
+    return map
+  } catch (_) { return {} }
+}
+
 export async function fetchVotersForBooths(boothNos, opts = {}) {
   const results = await Promise.all(boothNos.map(b => fetchVotersForBooth(b, opts)))
   return results.flat()

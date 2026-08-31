@@ -9,7 +9,7 @@ import {
   startSyncListener, stopSyncListener,
   startRealtimeSync, stopRealtimeSync,
   fetchVotersForBooths, fetchActiveSurveyData, fetchActivePoll,
-  fetchBoothResponses, syncPending, syncPendingPolls, getBoothNos,
+  fetchBoothResponses, fetchBoothNames, syncPending, syncPendingPolls, getBoothNos,
 } from '../src/services/sync'
 
 function AuthGuard() {
@@ -38,6 +38,17 @@ function AuthGuard() {
     loadPending()
     loadPendingPolls()
     startSyncListener()
+    // Fetch and store booth names for all assigned booths
+    if (boothNos.length > 1 && !agent.boothNames?.length) {
+      fetchBoothNames(boothNos).then(nameMap => {
+        const boothNames = boothNos.map(bn => nameMap[bn] || '')
+        const updated = { ...agent, boothNames }
+        useStore.setState({ agent: updated })
+        import('@react-native-async-storage/async-storage').then(({ default: AsyncStorage }) => {
+          AsyncStorage.setItem('@cast/agent', JSON.stringify(updated)).catch(() => {})
+        })
+      }).catch(() => {})
+    }
     fetchVotersForBooths(boothNos).then(setVoters).catch(() => {})
     fetchActiveSurveyData(primaryBooth)
       .then(res => {
