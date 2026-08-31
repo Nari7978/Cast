@@ -68,9 +68,20 @@ export default function HomeScreen() {
   }, [agent?.boothNo])
 
   useEffect(() => {
-    // If we have stale data show it immediately, refresh silently in background
-    if (hasData) load(false)
-    else load(false)
+    load(false)
+  }, [])
+
+  // Auto-refresh responses every 30s for live cross-agent progress
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const boothNos = getBoothNos(useStore.getState().agent)
+      const surveyId = useStore.getState().activeSurvey?.id
+      if (!boothNos.length) return
+      fetchBoothResponses(boothNos, surveyId)
+        .then(useStore.getState().mergeServerResponses)
+        .catch(() => {})
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   const total     = voters.length
