@@ -421,6 +421,12 @@ export default function BoothAgents() {
     ['All', ...[...new Set(booths.map(b => b.pollingStation).filter(Boolean))].sort()],
   [booths])
 
+  const boothMap = useMemo(() => {
+    const m = {}
+    booths.forEach(b => { m[b.boothNo] = b.pollingStation || '' })
+    return m
+  }, [booths])
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return agents.filter(a => {
@@ -586,12 +592,17 @@ export default function BoothAgents() {
                       <PINCell pin={agent.pin} />
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1 flex-wrap">
+                      <div className="flex flex-col gap-1">
                         {(agent.boothNos?.length ? agent.boothNos : (agent.boothNo ? [agent.boothNo] : [])).map(bn => (
-                          <span key={bn} className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold"
-                            style={{ background: '#EEF2FF', color: '#5B5CEB' }}>
-                            {bn}
-                          </span>
+                          <div key={bn} className="flex items-center gap-1.5">
+                            <span className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                              style={{ background: '#EEF2FF', color: '#5B5CEB' }}>
+                              {bn}
+                            </span>
+                            <span className="text-[12px] text-slate-600 truncate max-w-[140px]">
+                              {boothMap[bn] || '—'}
+                            </span>
+                          </div>
                         ))}
                       </div>
                     </td>
