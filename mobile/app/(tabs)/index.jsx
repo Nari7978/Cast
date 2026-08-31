@@ -121,7 +121,11 @@ export default function HomeScreen() {
           </View>
           <View style={styles.boothBadge}>
             <Ionicons name="location" size={12} color={theme.primary} />
-            <Text style={styles.boothBadgeText}>Booth {agent?.boothNo || '—'}</Text>
+            <Text style={styles.boothBadgeText}>
+              {agent?.boothNos?.length > 1
+                ? `Booths ${agent.boothNos.join(', ')}`
+                : `Booth ${agent?.boothNo || '—'}`}
+            </Text>
           </View>
         </View>
 
@@ -136,7 +140,9 @@ export default function HomeScreen() {
             <View style={styles.surveyCardMeta}>
               <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.7)" />
               <Text style={styles.surveyCardMetaText}>
-                Booth {agent?.boothNo}
+                {agent?.boothNos?.length > 1
+                  ? `Booths ${agent.boothNos.join(', ')}`
+                  : `Booth ${agent?.boothNo}`}
                 {agent?.station ? ` · ${agent.station}` : ''}
                 {activePhase?.name ? ` · ${activePhase.name}` : ''}
               </Text>
