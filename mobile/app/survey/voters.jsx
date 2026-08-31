@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, memo } from 'react'
+import { useState, useMemo, useCallback, memo, useEffect } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, Pressable,
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { theme } from '../../src/theme'
 import { useStore } from '../../src/store/useStore'
+import { fetchBoothResponses } from '../../src/services/sync'
 
 const STATUS_CFG = {
   completed:   { label: 'Done',        color: theme.success,  bg: theme.successLight, icon: 'checkmark-circle' },
@@ -65,6 +66,13 @@ export default function SurveyVotersScreen() {
 
   const [search,       setSearch]       = useState('')
   const [activeFilter, setActiveFilter] = useState('All')
+
+  useEffect(() => {
+    const { mergeServerResponses } = useStore.getState()
+    fetchBoothResponses(agent?.boothNo, activeSurvey?.id)
+      .then(mergeServerResponses)
+      .catch(() => {})
+  }, [])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
